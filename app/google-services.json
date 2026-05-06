@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "521569818566",
+    "project_id": "foodle-a9d8d",
+    "storage_bucket": "foodle-a9d8d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:521569818566:android:edb87257e44368649d44c7",
+        "android_client_info": {
+          "package_name": "com.example.foodle"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBqoZCawTyCNXZWVpB31W1eU00JsVf0Jz4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

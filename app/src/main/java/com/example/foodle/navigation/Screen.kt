@@ -1,0 +1,22 @@
+package com.example.foodle.navigation
+
+sealed class Screen(val route: String) {
+    object Splash : Screen("splash")
+    object Onboarding : Screen("onboarding")
+    object Login : Screen("login")
+    object Register : Screen("register")
+    object Home : Screen("home")
+    object RestaurantDetail : Screen("restaurant_detail/{restaurantId}") {
+        fun createRoute(restaurantId: String) = "restaurant_detail/$restaurantId"
+    }
+    object Cart : Screen("cart")
+    object Checkout : Screen("checkout")
+    object DriverSelection : Screen("driver_selection")
+    object OrderTracking : Screen("order_tracking")
+    object OrdersHistory : Screen("orders_history")
+    object Profile : Screen("profile")
+    // New Roles
+    object RestaurantAdmin : Screen("restaurant_admin")
+    object DriverApp : Screen("driver_app")
+    object RoleSelection : Screen("role_selection")
+}

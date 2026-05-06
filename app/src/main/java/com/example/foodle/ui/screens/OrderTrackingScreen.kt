@@ -1,0 +1,274 @@
+package com.example.foodle.ui.screens
+
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Message
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import coil.compose.AsyncImage
+import com.example.foodle.navigation.Screen
+import com.example.foodle.ui.OrderViewModel
+import com.example.foodle.ui.theme.Primary
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.*
+
+@Composable
+fun OrderStatusTimeline(currentStatus: String) {
+    val statuses = listOf("pending", "accepted", "delivering", "completed")
+    val currentStep = statuses.indexOf(currentStatus).coerceAtLeast(0)
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        statuses.forEachIndexed { index, _ ->
+            val isActive = index <= currentStep
+            val color = if (isActive) Primary else Color.LightGray
+            
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(color)
+            )
+            
+            if (index < statuses.size - 1) {
+                val lineColor = if (index < currentStep) Primary else Color.LightGray
+                Box(
+                    modifier = Modifier
+                        .height(2.dp)
+                        .weight(1f)
+                        .background(lineColor)
+                )
+            }
+        }
+    }
+    
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        val labels = listOf("Đã đặt", "Nhận đơn", "Đang giao", "Đến nơi")
+        labels.forEachIndexed { index, label ->
+            Text(
+                text = label,
+                fontSize = 10.sp,
+                color = if (index <= currentStep) Color.Black else Color.Gray,
+                fontWeight = if (index <= currentStep) FontWeight.Bold else FontWeight.Normal
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OrderTrackingScreen(navController: NavController, orderViewModel: OrderViewModel) {
+    val context = LocalContext.current
+    val currentOrder by orderViewModel.currentOrder.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    val driverName = currentOrder?.driverName ?: "Đang tìm tài xế..."
+    val driverPhone = "0987654321"
+    val driverAvatar = if (currentOrder?.driverId != null) 
+        "https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=200" 
+        else "https://via.placeholder.com/150"
+    
+    var showChatDialog by remember { mutableStateOf(false) }
+    var chatMessage by remember { mutableStateOf("") }
+    val chatHistory = remember { mutableStateListOf<String>() }
+
+    val hanoi = LatLng(21.0285, 105.8542)
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(hanoi, 15f)
+    }
+
+    // Xử lý thông báo Real-time khi trạng thái thay đổi
+    LaunchedEffect(currentOrder?.status) {
+        when(currentOrder?.status) {
+            "delivering" -> {
+                snackbarHostState.showSnackbar("Tài xế đã lấy hàng và đang trên đường giao!")
+            }
+        }
+    }
+
+    // Dialog khi hoàn thành đơn hàng
+    if (currentOrder?.status == "completed") {
+        AlertDialog(
+            onDismissRequest = { /* Không cho tắt */ },
+            title = { Text("Tuyệt vời! 🎉") },
+            text = { Text("Đơn hàng của bạn đã được giao thành công. Bạn có muốn đánh giá dịch vụ không?") },
+            confirmButton = {
+                Button(onClick = { 
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                    }
+                }) { Text("Đánh giá ngay") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                    }
+                }) { Text("Để sau") }
+            }
+        )
+    }
+
+    if (showChatDialog) {
+        AlertDialog(
+            onDismissRequest = { showChatDialog = false },
+            title = { Text("Chat với tài xế") },
+            text = {
+                Column {
+                    Box(modifier = Modifier.height(200.dp).fillMaxWidth()) {
+                        LazyColumn {
+                            items(chatHistory) { message ->
+                                Text("Bạn: $message", modifier = Modifier.padding(4.dp))
+                            }
+                        }
+                    }
+                    OutlinedTextField(
+                        value = chatMessage,
+                        onValueChange = { chatMessage = it },
+                        label = { Text("Tin nhắn") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (chatMessage.isNotBlank()) {
+                        chatHistory.add(chatMessage)
+                        chatMessage = ""
+                    }
+                }) {
+                    Text("Gửi")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showChatDialog = false }) {
+                    Text("Đóng")
+                }
+            }
+        )
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Theo dõi đơn hàng") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                    } }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            GoogleMap(
+                modifier = Modifier.fillMaxSize(),
+                cameraPositionState = cameraPositionState
+            ) {
+                Marker(
+                    state = MarkerState(position = hanoi),
+                    title = "Tài xế đang ở đây",
+                    snippet = "Đang giao hàng"
+                )
+            }
+
+            Card(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(8.dp)
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(text = "Trạng thái", fontSize = 12.sp, color = Color.Gray)
+                            Text(text = when(currentOrder?.status) {
+                                "pending" -> "Đang chờ quán nhận..."
+                                "accepted" -> "Quán đang chuẩn bị"
+                                "delivering" -> "Đang giao hàng"
+                                "completed" -> "Đã hoàn thành"
+                                else -> "Đang xử lý"
+                            }, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Primary)
+                        }
+                        Text(text = "15-20 phút", color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Status Timeline
+                    OrderStatusTimeline(currentStatus = currentOrder?.status ?: "pending")
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AsyncImage(
+                            model = driverAvatar,
+                            contentDescription = "Driver",
+                            modifier = Modifier
+                                .size(60.dp)
+                                .clip(RoundedCornerShape(30.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = driverName, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text(text = "Tài xế của bạn", fontSize = 14.sp, color = Color.Gray)
+                        }
+                        Row {
+                            IconButton(onClick = {
+                                val intent = Intent(Intent.ACTION_DIAL).apply {
+                                    data = Uri.parse("tel:$driverPhone")
+                                }
+                                context.startActivity(intent)
+                            }) {
+                                Icon(Icons.Default.Call, contentDescription = null, tint = Primary)
+                            }
+                            IconButton(onClick = { showChatDialog = true }) {
+                                Icon(Icons.AutoMirrored.Filled.Message, contentDescription = null, tint = Primary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
