@@ -12,11 +12,11 @@ mapsCompose = "6.1.2"
 playServicesMaps = "19.0.0"
 generativeAi = "0.9.0"
 firebaseBom = "33.7.0"
-kotlin = "2.0.21"
+kotlin = "2.0.20"
 composeBom = "2024.12.01"
 room = "2.6.1"
-ksp = "2.0.21-1.0.28"
-hilt = "2.52"
+ksp = "2.0.20-1.0.25"
+hilt = "2.51.1"
 hiltNavigationCompose = "1.2.0"
 retrofit = "2.11.0"
 okhttp = "4.12.0"
@@ -24,6 +24,8 @@ material = "1.12.0"
 appcompat = "1.7.0"
 constraintlayout = "2.2.0"
 googleServices = "4.4.2"
+secretsGradlePlugin = "2.0.1"
+playServicesAuth = "21.2.0"
 zxing = "3.5.3"
 
 [libraries]
@@ -56,6 +58,7 @@ firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore
 firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
+play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuth" }
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
@@ -76,3 +79,4 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 room = { id = "androidx.room", version.ref = "room" }
+secrets = { id = "com.google.android.libraries.mapsplatform.secrets-gradle-plugin", version.ref = "secretsGradlePlugin" }

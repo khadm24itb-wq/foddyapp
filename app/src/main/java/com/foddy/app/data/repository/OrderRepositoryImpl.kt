@@ -11,8 +11,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class OrderRepositoryImpl @Inject constructor() : OrderRepository {
-    private val firestore = FirebaseFirestore.getInstance()
+class OrderRepositoryImpl @Inject constructor(
+    private val firestore: FirebaseFirestore
+) : OrderRepository {
     private val ordersCollection = firestore.collection("orders")
 
     override fun getPendingOrders(): Flow<List<OrderRequest>> = callbackFlow {

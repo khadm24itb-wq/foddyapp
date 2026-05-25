@@ -13,8 +13,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class RestaurantRepositoryImpl @Inject constructor() : RestaurantRepository {
-    private val db = FirebaseFirestore.getInstance()
+class RestaurantRepositoryImpl @Inject constructor(
+    private val db: FirebaseFirestore
+) : RestaurantRepository {
 
     override fun getRestaurants(limit: Long, lastVisible: DocumentSnapshot?): Flow<Pair<List<Restaurant>, DocumentSnapshot?>> = callbackFlow {
         var query = db.collection("restaurants")
