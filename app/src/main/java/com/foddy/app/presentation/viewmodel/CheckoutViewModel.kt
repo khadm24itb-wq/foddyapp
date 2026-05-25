@@ -29,6 +29,7 @@ data class CheckoutUiState(
     val isLoading: Boolean = false,
     val cartItems: List<CartItem> = emptyList(),
     val totalPrice: Double = 0.0,
+    val customerId: String = "",
     val customerName: String = "",
     val deliveryAddress: String = "",
     val paymentStatus: PaymentStatus = PaymentStatus.PENDING,
@@ -82,6 +83,7 @@ class CheckoutViewModel @Inject constructor(
                 user?.let {
                     _uiState.update { state ->
                         state.copy(
+                            customerId = it.id,
                             customerName = it.name,
                             deliveryAddress = it.address
                         )
@@ -141,8 +143,8 @@ class CheckoutViewModel @Inject constructor(
                 // Tạo OrderRequest chuẩn từ dữ liệu hiện tại
                 val order = OrderRequest(
                     id = currentState.orderId,
-                    customerId = currentState.customerName, // Tạm thời dùng name, nên dùng UID
-                    restaurantName = "Foddy Store", // Có thể lấy từ item đầu tiên trong cart
+                    customerId = currentState.customerId,
+                    restaurantName = "Foddy Store",
                     address = currentState.deliveryAddress,
                     totalAmount = currentState.totalPrice,
                     items = currentState.cartItems,

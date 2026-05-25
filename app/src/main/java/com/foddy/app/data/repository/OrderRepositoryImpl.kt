@@ -17,13 +17,19 @@ class OrderRepositoryImpl @Inject constructor(
     private val ordersCollection = firestore.collection("orders")
 
     override fun getPendingOrders(): Flow<List<OrderRequest>> = callbackFlow {
-        val subscription = ordersCollection.addSnapshotListener { snapshot, error ->
+        // Lọc các đơn hàng chưa hoàn thành để tối ưu hiệu năng và tránh rò rỉ dữ liệu
+        val query = firestore.collection("orders")
+            .whereIn("status", listOf("pending", "accepted", "delivering"))
+
+        val subscription = query.addSnapshotListener { snapshot, error ->
             if (error != null) {
                 close(error)
                 return@addSnapshotListener
             }
             if (snapshot != null) {
-                val orders = snapshot.documents.mapNotNull { it.toObject(OrderRequest::class.java)?.copy(id = it.id) }
+                val orders = snapshot.documents.mapNotNull { 
+                    it.toObject(OrderRequest::class.java)?.copy(id = it.id) 
+                }
                 trySend(orders)
             }
         }

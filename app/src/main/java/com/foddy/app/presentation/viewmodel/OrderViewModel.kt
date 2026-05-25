@@ -37,10 +37,12 @@ class OrderViewModel @Inject constructor(
             orderRepository.getPendingOrders().collect { orders ->
                 _pendingOrders.value = orders
                 
-                // Update current order if it exists in the list
+                // Cập nhật currentOrder nếu có thay đổi quan trọng (tránh recompose thừa)
                 _currentOrder.value?.let { current ->
                     orders.find { it.id == current.id }?.let { updated ->
-                        _currentOrder.value = updated
+                        if (updated.status != current.status || updated.driverLocation != current.driverLocation) {
+                            _currentOrder.value = updated
+                        }
                     }
                 }
             }

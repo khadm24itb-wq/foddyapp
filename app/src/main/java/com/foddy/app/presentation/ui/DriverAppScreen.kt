@@ -1,5 +1,6 @@
 package com.foddy.app.presentation.ui
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -32,11 +33,17 @@ import com.foddy.app.presentation.ui.theme.Primary
 @Composable
 fun DriverAppScreen(navController: NavController, orderViewModel: OrderViewModel) {
     var isOnline by remember { mutableStateOf(false) }
-    val allOrders by orderViewModel.pendingOrders.collectAsState()
+    val allOrders by orderViewModel.pendingOrders.collectAsStateWithLifecycle()
     val currentDriverId = "1" 
 
-    val myOrders = allOrders.filter { 
-        it.status == "pending" || (it.status == "accepted" && it.driverId == currentDriverId) || (it.status == "delivering" && it.driverId == currentDriverId)
+    val myOrders by remember(allOrders, isOnline) {
+        derivedStateOf {
+            if (!isOnline) emptyList()
+            else allOrders.filter { 
+                it.status == "pending" || 
+                (it.driverId == currentDriverId && (it.status == "accepted" || it.status == "delivering"))
+            }
+        }
     }
 
     Scaffold(
@@ -142,10 +149,13 @@ fun DriverAppScreen(navController: NavController, orderViewModel: OrderViewModel
                 } else {
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(16.dp), 
-                        modifier = Modifier.padding(top = 16.dp),
+                        modifier = Modifier.fillMaxSize().padding(top = 16.dp),
                         contentPadding = PaddingValues(bottom = 32.dp)
                     ) {
-                        items(myOrders) { order ->
+                        items(
+                            items = myOrders,
+                            key = { it.id }
+                        ) { order ->
                             val statusLabel = when(order.status) {
                                 "pending" -> "ĐƠN MỚI"
                                 "accepted" -> "BẠN ĐÃ NHẬN"
