@@ -31,7 +31,6 @@ fun ProfileScreen(navController: NavController, userViewModel: UserViewModel) {
     var showEditDialog by remember { mutableStateOf(false) }
 
     var editName by remember { mutableStateOf(userProfile.name) }
-    var editEmail by remember { mutableStateOf(userProfile.email) }
 
     if (showEditDialog) {
         AlertDialog(
@@ -42,19 +41,14 @@ fun ProfileScreen(navController: NavController, userViewModel: UserViewModel) {
                     OutlinedTextField(
                         value = editName,
                         onValueChange = { editName = it },
-                        label = { Text("Họ và tên") }
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = editEmail,
-                        onValueChange = { editEmail = it },
-                        label = { Text("Email") }
+                        label = { Text("Họ và tên") },
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             },
             confirmButton = {
                 Button(onClick = {
-                    userViewModel.updateProfile(editName, editEmail)
+                    userViewModel.updateProfile(editName)
                     showEditDialog = false
                 }) {
                     Text("Lưu")
@@ -91,7 +85,6 @@ fun ProfileScreen(navController: NavController, userViewModel: UserViewModel) {
             Button(
                 onClick = { 
                     editName = userProfile.name
-                    editEmail = userProfile.email
                     showEditDialog = true 
                 },
                 modifier = Modifier.padding(top = 8.dp),

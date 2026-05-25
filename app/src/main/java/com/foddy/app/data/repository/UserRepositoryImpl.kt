@@ -1,23 +1,20 @@
 package com.foddy.app.data.repository
 
-import android.content.Context
 import com.foddy.app.data.local.UserDao
-import com.foddy.app.data.model.UserEntity
+import com.foddy.app.data.mapper.toEntity
 import com.foddy.app.domain.model.User
 import com.foddy.app.domain.repository.UserRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
-import com.google.firebase.auth.UserProfileChangeRequest
+import com.google.firebase.auth.userProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.callbackFlow
+import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
@@ -25,20 +22,18 @@ import javax.inject.Inject
 class UserRepositoryImpl @Inject constructor(
     private val userDao: UserDao,
     private val firebaseAuth: FirebaseAuth,
-    private val firestore: FirebaseFirestore,
-    @ApplicationContext private val context: Context
+    private val firestore: FirebaseFirestore
 ) : UserRepository {
 
     private val repositoryScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val _currentUser = MutableStateFlow<User?>(null)
+    private var userListener: ListenerRegistration? = null
 
     init {
-        // Listen to Firebase Auth state changes
         firebaseAuth.addAuthStateListener { auth ->
             val firebaseUser = auth.currentUser
             if (firebaseUser != null) {
-                // We will rely on the Firestore sync for the full user object
-                syncUserProfile(firebaseUser.email ?: "")
+                syncUserProfile(firebaseUser.uid)
             } else {
                 _currentUser.value = null
             }
@@ -47,16 +42,15 @@ class UserRepositoryImpl @Inject constructor(
 
     override fun getCurrentUser(): Flow<User?> = _currentUser.asStateFlow()
 
-    private fun syncUserProfile(email: String) {
-        if (email.isEmpty()) return
-        
-        firestore.collection("users").document(email)
+    private fun syncUserProfile(uid: String) {
+        userListener?.remove()
+        userListener = firestore.collection("users").document(uid)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null || !snapshot.exists()) {
-                    // If document doesn't exist yet, create a basic one from Auth
                     val firebaseUser = firebaseAuth.currentUser
                     if (firebaseUser != null && snapshot != null && !snapshot.exists()) {
                         val newUser = User(
+                            id = firebaseUser.uid,
                             email = firebaseUser.email ?: "",
                             name = firebaseUser.displayName ?: "User",
                             isLoggedIn = true
@@ -67,7 +61,8 @@ class UserRepositoryImpl @Inject constructor(
                 }
 
                 val user = User(
-                    email = snapshot.getString("email") ?: email,
+                    id = snapshot.id,
+                    email = snapshot.getString("email") ?: "",
                     name = snapshot.getString("name") ?: "User",
                     phoneNumber = snapshot.getString("phoneNumber") ?: "",
                     address = snapshot.getString("address") ?: "",
@@ -78,18 +73,8 @@ class UserRepositoryImpl @Inject constructor(
 
                 _currentUser.value = user
                 
-                // Cache to Room
                 repositoryScope.launch {
-                    userDao.insertUser(
-                        UserEntity(
-                            email = user.email,
-                            name = user.name,
-                            phoneNumber = user.phoneNumber,
-                            address = user.address,
-                            profilePictureUrl = user.profilePictureUrl,
-                            role = user.role
-                        )
-                    )
+                    userDao.insertUser(user.toEntity())
                 }
             }
     }
@@ -103,23 +88,32 @@ class UserRepositoryImpl @Inject constructor(
             "profilePictureUrl" to user.profilePictureUrl,
             "role" to user.role
         )
-        firestore.collection("users").document(user.email).set(userMap)
+        firestore.collection("users").document(user.id).set(userMap)
     }
 
-    override suspend fun registerUser(name: String, email: String, password: String): Result<Unit> {
+    override suspend fun register(name: String, email: String, password: String): Result<User> {
         return try {
-            val authResult = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
-            val firebaseUser = authResult.user
+            val result = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
             
-            val profileUpdates = UserProfileChangeRequest.Builder()
-                .setDisplayName(name)
-                .build()
-            firebaseUser?.updateProfile(profileUpdates)?.await()
+            result.user?.updateProfile(
+                userProfileChangeRequest {
+                    displayName = name
+                }
+            )?.await()
 
-            val newUser = User(email = email, name = name, isLoggedIn = true)
-            saveUserToFirestore(newUser)
-            
-            Result.success(Unit)
+            val firebaseUser = result.user ?: return Result.failure(Exception("Register failed"))
+
+            val user = User(
+                id = firebaseUser.uid,
+                email = firebaseUser.email ?: "",
+                name = firebaseUser.displayName ?: name,
+                isLoggedIn = true
+            )
+
+            saveUserToFirestore(user)
+            userDao.insertUser(user.toEntity())
+
+            Result.success(user)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -127,23 +121,48 @@ class UserRepositoryImpl @Inject constructor(
 
     override suspend fun login(email: String, password: String): Result<User> {
         return try {
-            val authResult = firebaseAuth.signInWithEmailAndPassword(email, password).await()
-            val firebaseUser = authResult.user
-            if (firebaseUser != null) {
-                // Syncing will be handled by the SnapshotListener in init
-                Result.success(User(email = email, name = firebaseUser.displayName ?: "", isLoggedIn = true))
+            val result = firebaseAuth.signInWithEmailAndPassword(email, password).await()
+            val firebaseUser = result.user ?: return Result.failure(Exception("Login failed"))
+
+            val user = User(
+                id = firebaseUser.uid,
+                email = firebaseUser.email ?: "",
+                name = firebaseUser.displayName ?: "",
+                isLoggedIn = true
+            )
+
+            // Re-sync with Firestore to get extra fields
+            val doc = firestore.collection("users").document(user.id).get().await()
+            val finalUser = if (doc.exists()) {
+                user.copy(
+                    phoneNumber = doc.getString("phoneNumber") ?: "",
+                    address = doc.getString("address") ?: "",
+                    role = doc.getString("role") ?: "USER"
+                )
             } else {
-                Result.failure(Exception("Login failed"))
+                saveUserToFirestore(user)
+                user
             }
+
+            userDao.insertUser(finalUser.toEntity())
+            Result.success(finalUser)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    override suspend fun updateProfile(name: String, email: String): Result<Unit> {
+    override suspend fun updateName(name: String): Result<Unit> {
         return try {
-            val updates = mapOf("name" to name)
-            firestore.collection("users").document(email).update(updates).await()
+            firebaseAuth.currentUser?.updateProfile(
+                userProfileChangeRequest {
+                    displayName = name
+                }
+            )?.await()
+            
+            val uid = firebaseAuth.currentUser?.uid
+            if (uid != null) {
+                firestore.collection("users").document(uid).update("name", name).await()
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -151,6 +170,7 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     override suspend fun logout() {
+        userListener?.remove()
         firebaseAuth.signOut()
         userDao.clearUser()
         _currentUser.value = null
@@ -160,23 +180,33 @@ class UserRepositoryImpl @Inject constructor(
         return try {
             val credential = GoogleAuthProvider.getCredential(idToken, null)
             val authResult = firebaseAuth.signInWithCredential(credential).await()
-            val firebaseUser = authResult.user
-            if (firebaseUser != null) {
-                // Logic to check if user exists in Firestore, if not create
-                val doc = firestore.collection("users").document(firebaseUser.email!!).get().await()
-                if (!doc.exists()) {
-                    val newUser = User(
-                        email = firebaseUser.email!!,
-                        name = firebaseUser.displayName ?: "Google User",
-                        isLoggedIn = true,
-                        profilePictureUrl = firebaseUser.photoUrl?.toString() ?: ""
-                    )
-                    saveUserToFirestore(newUser)
-                }
-                Result.success(User(email = firebaseUser.email!!, name = firebaseUser.displayName ?: "", isLoggedIn = true))
+            val firebaseUser = authResult.user ?: return Result.failure(Exception("Google Sign-In failed"))
+            
+            val doc = firestore.collection("users").document(firebaseUser.uid).get().await()
+            val user = if (!doc.exists()) {
+                val newUser = User(
+                    id = firebaseUser.uid,
+                    email = firebaseUser.email ?: "",
+                    name = firebaseUser.displayName ?: "Google User",
+                    isLoggedIn = true,
+                    profilePictureUrl = firebaseUser.photoUrl?.toString() ?: ""
+                )
+                saveUserToFirestore(newUser)
+                newUser
             } else {
-                Result.failure(Exception("Google Sign-In failed"))
+                User(
+                    id = firebaseUser.uid,
+                    email = firebaseUser.email ?: "",
+                    name = doc.getString("name") ?: firebaseUser.displayName ?: "User",
+                    isLoggedIn = true,
+                    phoneNumber = doc.getString("phoneNumber") ?: "",
+                    address = doc.getString("address") ?: "",
+                    role = doc.getString("role") ?: "USER"
+                )
             }
+            
+            userDao.insertUser(user.toEntity())
+            Result.success(user)
         } catch (e: Exception) {
             Result.failure(e)
         }

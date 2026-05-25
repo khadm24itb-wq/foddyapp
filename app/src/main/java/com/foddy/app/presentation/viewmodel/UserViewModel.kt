@@ -30,8 +30,8 @@ class UserViewModel @Inject constructor(
 
     // Compatibility property for existing UI screens
     val user: StateFlow<User> = _uiState
-        .map { it.user ?: User("", "") }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), User("", ""))
+        .map { it.user ?: User(id = "", email = "", name = "") }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), User(id = "", email = "", name = ""))
 
     init {
         loadUser()
@@ -57,7 +57,7 @@ class UserViewModel @Inject constructor(
 
     fun register(name: String, email: String, password: String, onComplete: (Boolean) -> Unit) {
         viewModelScope.launch {
-            userRepository.registerUser(name, email, password)
+            userRepository.register(name, email, password)
                 .onSuccess {
                     onComplete(true)
                 }
@@ -94,9 +94,9 @@ class UserViewModel @Inject constructor(
         }
     }
 
-    fun updateProfile(newName: String, email: String) {
+    fun updateProfile(newName: String) {
         viewModelScope.launch {
-            userRepository.updateProfile(newName, email)
+            userRepository.updateName(newName)
         }
     }
 

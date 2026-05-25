@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.hilt)
     alias(libs.plugins.google.services)
+    id("com.google.firebase.crashlytics")
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.room)
     alias(libs.plugins.secrets)
@@ -88,6 +89,7 @@ dependencies {
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.messaging)
     implementation(libs.firebase.auth)
+    implementation(libs.firebase.crashlytics)
     implementation(libs.play.services.auth)
 
     // Generative AI (Gemini)
