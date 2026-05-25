@@ -9,8 +9,8 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="com.example.foodle" />
-                  <option name="mobileSdkAppId" value="1:521569818566:android:edb87257e44368649d44c7" />
+                  <option name="appId" value="com.foddy.app" />
+                  <option name="mobileSdkAppId" value="1:521569818566:android:43bda02cdf1c76ba9d44c7" />
                   <option name="projectId" value="foodle-a9d8d" />
                   <option name="projectNumber" value="521569818566" />
                 </ConnectionSetting>

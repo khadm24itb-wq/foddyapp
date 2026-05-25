@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">foodle</string>
+    <string name="app_name">FoddyApp</string>
+    <string name="welcome">Chào mừng bạn đến với FoddyApp!</string>
 </resources>
