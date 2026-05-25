@@ -31,7 +31,11 @@ import com.foddy.app.domain.model.Restaurant
 import com.foddy.app.presentation.navigation.Screen
 import com.foddy.app.presentation.viewmodel.MenuViewModel
 import com.foddy.app.presentation.viewmodel.RecommendationViewModel
+import com.foddy.app.presentation.viewmodel.RestaurantViewModel
+import com.foddy.app.presentation.viewmodel.RestaurantUiState
 import com.foddy.app.presentation.ui.theme.Primary
+import com.foddy.app.presentation.ui.components.ShimmerRestaurantItem
+import com.foddy.app.presentation.ui.components.ShimmerItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,8 +49,7 @@ fun HomeScreen(
     val aiRecommendations by recommendationViewModel.recommendations.collectAsState()
     val isLoadingAi by recommendationViewModel.isLoading.collectAsState()
     
-    val restaurants by restaurantViewModel.restaurants.collectAsState()
-    val isLoadingRestaurants by restaurantViewModel.isLoading.collectAsState()
+    val restaurantUiState by restaurantViewModel.uiState.collectAsState()
     
     val flashSaleItems = menuItems.filter { it.isFlashSale }
     val scrollState = rememberScrollState()
@@ -106,9 +109,14 @@ fun HomeScreen(
 
         // AI Recommendations Section
         if (isLoadingAi) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Primary)
-            Text("AI đang tìm món ngon cho bạn...", fontSize = 12.sp, color = Color.Gray)
-            Spacer(modifier = Modifier.height(16.dp))
+            Text(text = "AI đang tìm món ngon cho bạn... ✨", fontSize = 14.sp, color = Color.Gray)
+            Spacer(modifier = Modifier.height(12.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                items(3) {
+                    ShimmerItem(modifier = Modifier.width(160.dp).height(160.dp))
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
         } else if (aiRecommendations.isNotEmpty()) {
             Text(text = "Gợi ý từ AI ✨", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6200EE))
             Text(text = "Dựa trên sở thích của bạn", fontSize = 12.sp, color = Color.Gray)
@@ -144,16 +152,37 @@ fun HomeScreen(
         Text(text = "Quán ăn gần bạn", fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(12.dp))
         
-        restaurants.forEach { restaurant ->
-            RestaurantCard(restaurant) {
-                navController.navigate(Screen.RestaurantDetail.createRoute(restaurant.id))
+        when (val state = restaurantUiState) {
+            is RestaurantUiState.Loading -> {
+                repeat(3) {
+                    ShimmerRestaurantItem()
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        if (isLoadingRestaurants) {
-            Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Primary)
+            is RestaurantUiState.Success -> {
+                state.restaurants.forEach { restaurant ->
+                    RestaurantCard(restaurant) {
+                        navController.navigate(Screen.RestaurantDetail.createRoute(restaurant.id))
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                
+                if (state.isLoadingMore) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Primary)
+                    }
+                }
+            }
+            is RestaurantUiState.Error -> {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(text = "Lỗi: ${state.message}", color = Color.Red)
+                    Button(onClick = { restaurantViewModel.refresh() }, colors = ButtonDefaults.buttonColors(containerColor = Primary)) {
+                        Text("Thử lại")
+                    }
+                }
             }
         }
     }

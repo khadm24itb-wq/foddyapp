@@ -79,6 +79,21 @@ class UserViewModel @Inject constructor(
         }
     }
 
+    fun signInWithGoogle(idToken: String, onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            userRepository.signInWithGoogle(idToken)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(user = it, isLoading = false)
+                    onComplete(true)
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(error = it.message, isLoading = false)
+                    onComplete(false)
+                }
+        }
+    }
+
     fun updateProfile(newName: String, email: String) {
         viewModelScope.launch {
             userRepository.updateProfile(newName, email)

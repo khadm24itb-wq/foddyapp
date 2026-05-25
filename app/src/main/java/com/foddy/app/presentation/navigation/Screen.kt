@@ -19,4 +19,5 @@ sealed class Screen(val route: String) {
     object RestaurantAdmin : Screen("restaurant_admin")
     object DriverApp : Screen("driver_app")
     object RoleSelection : Screen("role_selection")
+    object AIAssistant : Screen("ai_assistant")
 }

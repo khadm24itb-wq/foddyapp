@@ -1,19 +1,19 @@
 package com.foddy.app.data.local
 
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
 import com.foddy.app.data.model.UserEntity
-import androidx.room.*
 
 @Dao
 interface UserDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun registerUser(user: UserEntity)
+    suspend fun insertUser(user: UserEntity)
 
-    @Query("SELECT * FROM users WHERE email = :email LIMIT 1")
-    suspend fun getUserByEmail(email: String): UserEntity?
+    @Query("SELECT * FROM users LIMIT 1")
+    suspend fun getUser(): UserEntity?
 
-    @Query("UPDATE users SET name = :newName WHERE email = :email")
-    suspend fun updateName(email: String, newName: String)
-
-    @Query("SELECT * FROM users LIMIT :pageSize OFFSET :offset")
-    suspend fun getUsersPaginated(pageSize: Int, offset: Int): List<UserEntity>
+    @Query("DELETE FROM users")
+    suspend fun clearUser()
 }

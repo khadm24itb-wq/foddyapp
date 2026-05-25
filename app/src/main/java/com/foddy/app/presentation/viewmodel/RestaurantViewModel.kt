@@ -13,29 +13,47 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
+sealed interface RestaurantUiState {
+    object Loading : RestaurantUiState
+    data class Success(
+        val restaurants: List<Restaurant>,
+        val isLastPage: Boolean = false,
+        val isLoadingMore: Boolean = false
+    ) : RestaurantUiState
+    data class Error(val message: String) : RestaurantUiState
+}
+
 @HiltViewModel
-class RestaurantViewModel @Inject constructor() : ViewModel() {
-    private val db = FirebaseFirestore.getInstance()
-    private val _restaurants = MutableStateFlow<List<Restaurant>>(emptyList())
-    val restaurants: StateFlow<List<Restaurant>> = _restaurants
+class RestaurantViewModel @Inject constructor(
+    private val firestore: FirebaseFirestore
+) : ViewModel() {
+    private val _uiState = MutableStateFlow<RestaurantUiState>(RestaurantUiState.Loading)
+    val uiState: StateFlow<RestaurantUiState> = _uiState
 
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading
-
+    // Keep internal state for pagination
+    private var allRestaurants = mutableListOf<Restaurant>()
     private var lastVisible: DocumentSnapshot? = null
     private var isLastPage = false
+    private var isCurrentlyLoading = false
 
     init {
         loadMoreRestaurants()
     }
 
     fun loadMoreRestaurants() {
-        if (_isLoading.value || isLastPage) return
+        if (isCurrentlyLoading || isLastPage) return
 
         viewModelScope.launch {
-            _isLoading.value = true
+            isCurrentlyLoading = true
+            
+            // Update UI to show loading more if we already have data
+            val currentState = _uiState.value
+            if (currentState is RestaurantUiState.Success) {
+                _uiState.value = currentState.copy(isLoadingMore = true)
+            }
+
             try {
-                var query = db.collection("restaurants")
+                var query = firestore.collection("restaurants")
                     .orderBy("rating", Query.Direction.DESCENDING)
                     .limit(10)
 
@@ -48,13 +66,28 @@ class RestaurantViewModel @Inject constructor() : ViewModel() {
                     isLastPage = true
                 } else {
                     val newRestaurants = snapshot.toObjects(Restaurant::class.java)
-                    _restaurants.value = _restaurants.value + newRestaurants
+                    allRestaurants.addAll(newRestaurants)
                     lastVisible = snapshot.documents[snapshot.size() - 1]
                 }
+                
+                _uiState.value = RestaurantUiState.Success(
+                    restaurants = allRestaurants.toList(),
+                    isLastPage = isLastPage,
+                    isLoadingMore = false
+                )
             } catch (e: Exception) {
-                println("Error loading restaurants: ${e.message}")
+                if (allRestaurants.isEmpty()) {
+                    _uiState.value = RestaurantUiState.Error(e.message ?: "Unknown Error")
+                } else {
+                    // If we have data, just stop the loading more indicator
+                    _uiState.value = RestaurantUiState.Success(
+                        restaurants = allRestaurants.toList(),
+                        isLastPage = isLastPage,
+                        isLoadingMore = false
+                    )
+                }
             } finally {
-                _isLoading.value = false
+                isCurrentlyLoading = false
             }
         }
     }
@@ -62,7 +95,8 @@ class RestaurantViewModel @Inject constructor() : ViewModel() {
     fun refresh() {
         lastVisible = null
         isLastPage = false
-        _restaurants.value = emptyList()
+        allRestaurants.clear()
+        _uiState.value = RestaurantUiState.Loading
         loadMoreRestaurants()
     }
 }

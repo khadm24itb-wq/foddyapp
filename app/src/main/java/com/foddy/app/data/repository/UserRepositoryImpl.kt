@@ -11,8 +11,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
+import kotlinx.coroutines.tasks.await
+
 class UserRepositoryImpl @Inject constructor(
     private val userDao: UserDao,
+    private val firebaseAuth: FirebaseAuth,
     @ApplicationContext private val context: Context
 ) : UserRepository {
 
@@ -76,8 +81,31 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     override suspend fun logout() {
+        firebaseAuth.signOut()
         sharedPrefs.edit().clear().apply()
         _currentUser.value = null
+    }
+
+    override suspend fun signInWithGoogle(idToken: String): Result<User> {
+        return try {
+            val credential = GoogleAuthProvider.getCredential(idToken, null)
+            val authResult = firebaseAuth.signInWithCredential(credential).await()
+            val firebaseUser = authResult.user
+            if (firebaseUser != null) {
+                val user = User(
+                    email = firebaseUser.email ?: "",
+                    name = firebaseUser.displayName ?: "Google User",
+                    isLoggedIn = true
+                )
+                loginLocal(user.name, user.email)
+                _currentUser.value = user
+                Result.success(user)
+            } else {
+                Result.failure(Exception("Google Sign-In failed: User is null"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     private fun loginLocal(name: String, email: String) {

@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.foddy.app.BuildConfig
+
+data class Message(val text: String, val isUser: Boolean)
 
 @HiltViewModel
 class RecommendationViewModel @Inject constructor() : ViewModel() {
@@ -19,11 +22,41 @@ class RecommendationViewModel @Inject constructor() : ViewModel() {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    // S? d?ng Gemini AI d? g?i � m�n an (C?n API Key th?c t? t? Google AI Studio)
+    private val _chatHistory = MutableStateFlow<List<Message>>(emptyList())
+    val chatHistory: StateFlow<List<Message>> = _chatHistory.asStateFlow()
+
+    // Sử dụng Gemini AI từ BuildConfig
     private val generativeModel = GenerativeModel(
         modelName = "gemini-1.5-flash",
-        apiKey = "YOUR_GEMINI_API_KEY_HERE" 
+        apiKey = BuildConfig.GEMINI_API_KEY
     )
+
+    fun sendMessage(text: String, allItems: List<FoodItem>) {
+        if (text.isBlank()) return
+
+        val userMessage = Message(text, true)
+        _chatHistory.value = _chatHistory.value + userMessage
+        
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val prompt = """
+                    Bạn là một trợ lý ảo của ứng dụng Foddy, chuyên gợi ý món ăn.
+                    Người dùng hỏi: "$text".
+                    Danh sách món ăn có sẵn: ${allItems.joinToString { it.name }}.
+                    Hãy trả lời thân thiện và gợi ý các món phù hợp từ danh sách trên nếu có thể.
+                """.trimIndent()
+
+                val response = generativeModel.generateContent(prompt)
+                val aiResponse = response.text ?: "Xin lỗi, tôi không thể xử lý yêu cầu này."
+                _chatHistory.value = _chatHistory.value + Message(aiResponse, false)
+            } catch (e: Exception) {
+                _chatHistory.value = _chatHistory.value + Message("Lỗi kết nối AI: ${e.message}", false)
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
 
     fun getAIRecommendations(userPreferences: String, allItems: List<FoodItem>) {
         if (_recommendations.value.isNotEmpty()) return
@@ -32,10 +65,10 @@ class RecommendationViewModel @Inject constructor() : ViewModel() {
             _isLoading.value = true
             try {
                 val prompt = """
-                    D?a tr�n s? th�ch c?a ngu?i d�ng: "$userPreferences".
-                    H�y ch?n ra t?i da 3 m�n an ph� h?p nh?t t? danh s�ch sau:
+                    Dựa trên sở thích của người dùng: "$userPreferences".
+                    Hãy chọn ra tối đa 3 món ăn phù hợp nhất từ danh sách sau:
                     ${allItems.joinToString { it.name }}
-                    Tr? v? CH? t�n c�c m�n an, c�ch nhau b?i d?u ph?y.
+                    Trả về CHỈ tên các món ăn, cách nhau bởi dấu phẩy.
                 """.trimIndent()
 
                 val response = generativeModel.generateContent(prompt)
@@ -45,7 +78,7 @@ class RecommendationViewModel @Inject constructor() : ViewModel() {
                     recommendedNames.any { it.contains(item.name, ignoreCase = true) }
                 }
             } catch (e: Exception) {
-                // Fallback n?u AI l?i ho?c chua c� API Key: L?y ng?u nhi�n 2 m�n
+                // Fallback nếu AI lỗi: Lấy ngẫu nhiên 2 món
                 _recommendations.value = allItems.shuffled().take(2)
             } finally {
                 _isLoading.value = false

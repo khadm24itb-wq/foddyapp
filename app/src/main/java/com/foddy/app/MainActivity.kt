@@ -51,6 +51,7 @@ fun MainApp() {
     val orderViewModel: OrderViewModel = hiltViewModel()
     val userViewModel: UserViewModel = hiltViewModel()
     val mainViewModel: MainViewModel = hiltViewModel()
+    val recommendationViewModel: RecommendationViewModel = hiltViewModel()
     
     Scaffold(
         bottomBar = { BottomNavigationBar(navController) }
@@ -85,6 +86,7 @@ fun MainApp() {
             composable(Screen.OrderTracking.route) { OrderTrackingScreen(navController, orderViewModel) }
             composable(Screen.OrdersHistory.route) { OrdersHistoryScreen(navController, orderViewModel) }
             composable(Screen.Profile.route) { ProfileScreen(navController, userViewModel) }
+            composable(Screen.AIAssistant.route) { AIAssistantScreen(navController, recommendationViewModel, menuViewModel) }
             composable(Screen.RestaurantAdmin.route) { RestaurantAdminScreen(navController, menuViewModel) }
             composable(Screen.DriverApp.route) { DriverAppScreen(navController, orderViewModel) }
         }
