@@ -1,10 +1,12 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.google.services)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.room)
+    alias(libs.plugins.secrets)
+    kotlin("kapt")
 }
 
 android {
@@ -45,6 +47,16 @@ android {
         viewBinding = true
         buildConfig = true
     }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+}
+
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 dependencies {
@@ -76,6 +88,7 @@ dependencies {
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.messaging)
     implementation(libs.firebase.auth)
+    implementation(libs.play.services.auth)
 
     // Generative AI (Gemini)
     implementation(libs.generativeai)
@@ -93,11 +106,11 @@ dependencies {
     // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
-    ksp(libs.room.compiler)
+    kapt(libs.room.compiler)
 
     // Hilt (Dependency Injection)
     implementation(libs.dagger.hilt.android)
-    ksp(libs.dagger.hilt.compiler)
+    kapt(libs.dagger.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
 
     // Testing

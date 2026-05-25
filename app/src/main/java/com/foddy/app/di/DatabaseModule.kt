@@ -22,7 +22,7 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "foddy_database"
-        ).build()
+        ).fallbackToDestructiveMigration().build()
     }
 
     @Provides
