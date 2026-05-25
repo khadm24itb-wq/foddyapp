@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:521569818566:android:edb87257e44368649d44c7",
+        "mobilesdk_app_id": "1:521569818566:android:43bda02cdf1c76ba9d44c7",
         "android_client_info": {
-          "package_name": "com.example.foodle"
+          "package_name": "com.foddy.app"
         }
       },
       "oauth_client": [],
