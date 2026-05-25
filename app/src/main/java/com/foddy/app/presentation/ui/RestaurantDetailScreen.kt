@@ -40,6 +40,9 @@ fun RestaurantDetailScreen(
     menuViewModel: MenuViewModel
 ) {
     val menuItems by menuViewModel.foodItems.collectAsState()
+    val cartItems by cartViewModel.cartItems.collectAsState()
+    val totalPrice by cartViewModel.totalPrice.collectAsState()
+    
     val restaurant = DummyData.restaurants.find { it.id == restaurantId } ?: return
     // Sử dụng menu từ ViewModel nếu là nhà hàng chính (id=1), còn lại dùng dummy
     val displayMenu = if (restaurant.id == "1") menuItems else restaurant.menu
@@ -56,7 +59,7 @@ fun RestaurantDetailScreen(
             )
         },
         bottomBar = {
-            if (cartViewModel.cartItems.isNotEmpty()) {
+            if (cartItems.isNotEmpty()) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -72,7 +75,7 @@ fun RestaurantDetailScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "${cartViewModel.cartItems.sumOf { it.quantity }} món",
+                            text = "${cartItems.sumOf { it.quantity }} món",
                             color = Color.White,
                             fontWeight = FontWeight.Bold
                         )
@@ -82,7 +85,7 @@ fun RestaurantDetailScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "${cartViewModel.totalPrice.toInt()}đ",
+                            text = "${totalPrice.toInt()}đ",
                             color = Color.White,
                             fontWeight = FontWeight.Bold
                         )

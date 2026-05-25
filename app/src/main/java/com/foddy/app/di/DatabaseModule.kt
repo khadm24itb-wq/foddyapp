@@ -3,6 +3,7 @@ package com.foddy.app.di
 import android.content.Context
 import androidx.room.Room
 import com.foddy.app.data.local.AppDatabase
+import com.foddy.app.data.local.CartDao
 import com.foddy.app.data.local.UserDao
 import dagger.Module
 import dagger.Provides
@@ -28,5 +29,15 @@ object DatabaseModule {
     @Provides
     fun provideUserDao(database: AppDatabase): UserDao {
         return database.userDao()
+    }
+
+    @Provides
+    fun provideCartDao(database: AppDatabase): CartDao {
+        return database.cartDao()
+    }
+
+    @Provides
+    fun provideFoodItemDao(database: AppDatabase): com.foddy.app.data.local.FoodItemDao {
+        return database.foodItemDao()
     }
 }

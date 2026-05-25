@@ -103,6 +103,9 @@ dependencies {
     // QR Code Generation
     implementation(libs.zxing)
 
+    // Logging
+    implementation(libs.timber)
+
     // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)

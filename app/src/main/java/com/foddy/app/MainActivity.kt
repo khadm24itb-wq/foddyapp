@@ -83,7 +83,13 @@ fun MainApp() {
             composable(Screen.Cart.route) { CartScreen(navController, cartViewModel) }
             composable(Screen.Checkout.route) { CheckoutScreen(navController, cartViewModel, userViewModel) }
             composable(Screen.DriverSelection.route) { DriverSelectionScreen(navController, orderViewModel) }
-            composable(Screen.OrderTracking.route) { OrderTrackingScreen(navController, orderViewModel) }
+            composable(
+                route = Screen.OrderTracking.route,
+                arguments = listOf(navArgument("orderId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val orderId = backStackEntry.arguments?.getString("orderId") ?: ""
+                OrderTrackingScreen(navController, orderId, orderViewModel)
+            }
             composable(Screen.OrdersHistory.route) { OrdersHistoryScreen(navController, orderViewModel) }
             composable(Screen.Profile.route) { ProfileScreen(navController, userViewModel) }
             composable(Screen.AIAssistant.route) { AIAssistantScreen(navController, recommendationViewModel, menuViewModel) }

@@ -27,9 +27,11 @@ import coil.compose.AsyncImage
 import com.foddy.app.presentation.navigation.Screen
 import com.foddy.app.presentation.viewmodel.OrderViewModel
 import com.foddy.app.presentation.ui.theme.Primary
+import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
+import timber.log.Timber
 
 @Composable
 fun OrderStatusTimeline(currentStatus: String) {
@@ -82,11 +84,19 @@ fun OrderStatusTimeline(currentStatus: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OrderTrackingScreen(navController: NavController, orderViewModel: OrderViewModel) {
+fun OrderTrackingScreen(
+    navController: NavController, 
+    orderId: String,
+    orderViewModel: OrderViewModel
+) {
     val context = LocalContext.current
     val currentOrder by orderViewModel.currentOrder.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     
+    LaunchedEffect(orderId) {
+        orderViewModel.trackOrder(orderId)
+    }
+
     val driverName = currentOrder?.driverName ?: "Đang tìm tài xế..."
     val driverPhone = "0987654321"
     val driverAvatar = if (currentOrder?.driverId != null) 
@@ -98,15 +108,32 @@ fun OrderTrackingScreen(navController: NavController, orderViewModel: OrderViewM
     val chatHistory = remember { mutableStateListOf<String>() }
 
     val hanoi = LatLng(21.0285, 105.8542)
+    val driverPos = currentOrder?.driverLocation?.let { LatLng(it["lat"] ?: 21.0285, it["lng"] ?: 105.8542) } ?: hanoi
+    
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(hanoi, 15f)
+        position = CameraPosition.fromLatLngZoom(driverPos, 15f)
+    }
+
+    // Cập nhật vị trí camera khi tài xế di chuyển
+    LaunchedEffect(driverPos) {
+        Timber.d("Driver location updated: $driverPos")
+        cameraPositionState.animate(
+            CameraUpdateFactory.newLatLng(driverPos)
+        )
     }
 
     // Xử lý thông báo Real-time khi trạng thái thay đổi
     LaunchedEffect(currentOrder?.status) {
+        Timber.d("Order status changed to: ${currentOrder?.status}")
         when(currentOrder?.status) {
+            "accepted" -> {
+                snackbarHostState.showSnackbar("Đơn hàng của bạn đã được nhà hàng xác nhận!")
+            }
             "delivering" -> {
                 snackbarHostState.showSnackbar("Tài xế đã lấy hàng và đang trên đường giao!")
+            }
+            "completed" -> {
+                snackbarHostState.showSnackbar("Đơn hàng đã hoàn thành. Cảm ơn bạn!")
             }
         }
     }
@@ -198,9 +225,13 @@ fun OrderTrackingScreen(navController: NavController, orderViewModel: OrderViewM
                 cameraPositionState = cameraPositionState
             ) {
                 Marker(
-                    state = MarkerState(position = hanoi),
-                    title = "Tài xế đang ở đây",
-                    snippet = "Đang giao hàng"
+                    state = MarkerState(position = driverPos),
+                    title = driverName,
+                    snippet = when(currentOrder?.status) {
+                        "delivering" -> "Đang giao hàng"
+                        "accepted" -> "Đang đến nhà hàng"
+                        else -> "Đang chờ"
+                    }
                 )
             }
 

@@ -12,6 +12,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -28,6 +30,9 @@ import com.foddy.app.presentation.ui.theme.Primary
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CartScreen(navController: NavController, cartViewModel: CartViewModel) {
+    val items by cartViewModel.cartItems.collectAsState()
+    val totalPrice by cartViewModel.totalPrice.collectAsState()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -40,7 +45,7 @@ fun CartScreen(navController: NavController, cartViewModel: CartViewModel) {
             )
         },
         bottomBar = {
-            if (cartViewModel.cartItems.isNotEmpty()) {
+            if (items.isNotEmpty()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -52,7 +57,7 @@ fun CartScreen(navController: NavController, cartViewModel: CartViewModel) {
                     ) {
                         Text(text = "Tổng cộng", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         Text(
-                            text = "${cartViewModel.totalPrice.toInt()}đ",
+                            text = "${totalPrice.toInt()}đ",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = Primary
@@ -76,7 +81,7 @@ fun CartScreen(navController: NavController, cartViewModel: CartViewModel) {
             }
         }
     ) { padding ->
-        if (cartViewModel.cartItems.isEmpty()) {
+        if (items.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(text = "Giỏ hàng trống", color = Color.Gray)
             }
@@ -88,7 +93,7 @@ fun CartScreen(navController: NavController, cartViewModel: CartViewModel) {
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(cartViewModel.cartItems) { item ->
+                items(items) { item ->
                     CartItemRow(
                         item = item,
                         onIncrease = { cartViewModel.addToCart(item.foodItem) },

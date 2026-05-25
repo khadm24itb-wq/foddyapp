@@ -159,6 +159,12 @@ fun DriverAppScreen(navController: NavController, orderViewModel: OrderViewModel
                                 address = order.address,
                                 price = "${order.totalAmount.toInt()}đ",
                                 status = statusLabel,
+                                isSimulating = order.status == "delivering",
+                                onSimulateToggle = {
+                                    if (order.status == "delivering") {
+                                        orderViewModel.startLocationSimulation(order.id)
+                                    }
+                                },
                                 buttonText = when(order.status) {
                                     "pending" -> "Nhận đơn ngay"
                                     "accepted" -> "Bắt đầu giao"
@@ -169,7 +175,10 @@ fun DriverAppScreen(navController: NavController, orderViewModel: OrderViewModel
                                 when(order.status) {
                                     "pending" -> orderViewModel.acceptOrder(order.id, currentDriverId, "Trần Văn Gấu")
                                     "accepted" -> orderViewModel.updateOrderStatus(order.id, "delivering")
-                                    "delivering" -> orderViewModel.updateOrderStatus(order.id, "completed")
+                                    "delivering" -> {
+                                        orderViewModel.stopLocationSimulation()
+                                        orderViewModel.updateOrderStatus(order.id, "completed")
+                                    }
                                 }
                             }
                         }
@@ -197,6 +206,8 @@ fun OrderRequestCard(
     price: String, 
     status: String,
     buttonText: String,
+    isSimulating: Boolean = false,
+    onSimulateToggle: () -> Unit = {},
     onAccept: () -> Unit
 ) {
     ElevatedCard(
@@ -248,6 +259,21 @@ fun OrderRequestCard(
                 )
             }
             
+            if (status == "ĐANG GIAO") {
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Mô phỏng di chuyển", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Switch(
+                        checked = isSimulating,
+                        onCheckedChange = { onSimulateToggle() }
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(20.dp))
             
             Button(

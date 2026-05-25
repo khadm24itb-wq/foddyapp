@@ -29,9 +29,11 @@ import com.foddy.app.domain.model.PaymentStatus
 import com.foddy.app.presentation.navigation.Screen
 import com.foddy.app.presentation.ui.theme.Primary
 import com.foddy.app.presentation.viewmodel.CartViewModel
+import com.foddy.app.presentation.viewmodel.CheckoutUiEffect
 import com.foddy.app.presentation.viewmodel.CheckoutViewModel
 import com.foddy.app.presentation.viewmodel.UserViewModel
 import com.foddy.app.util.QRGenerator
+import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,30 +43,31 @@ fun CheckoutScreen(
     userViewModel: UserViewModel,
     checkoutViewModel: CheckoutViewModel = hiltViewModel()
 ) {
-    val address by remember { mutableStateOf("123 Đường Cầu Giấy, Hà Nội") }
-    val userProfile by userViewModel.user.collectAsState()
-    val checkoutUiState by checkoutViewModel.uiState.collectAsState()
+    val uiState by checkoutViewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Đồng bộ tổng tiền từ Cart
-    LaunchedEffect(cartViewModel.totalPrice) {
-        checkoutViewModel.setTotal(cartViewModel.totalPrice.toLong())
-    }
-
-    // Hiển thị thông báo lỗi nếu có
-    LaunchedEffect(checkoutUiState.error) {
-        checkoutUiState.error?.let {
-            snackbarHostState.showSnackbar(it)
+    // Xử lý UiEffect (Navigation, Error)
+    LaunchedEffect(Unit) {
+        checkoutViewModel.uiEffect.collectLatest { effect ->
+            when (effect) {
+                is CheckoutUiEffect.NavigateToSuccess -> {
+                    // Thành công thì không cần clear cart thủ công ở đây vì ViewModel đã làm
+                    // Nhưng có thể thêm logic tracking tại đây
+                }
+                is CheckoutUiEffect.ShowError -> {
+                    snackbarHostState.showSnackbar(effect.message)
+                }
+            }
         }
     }
 
-    if (checkoutUiState.paymentStatus == PaymentStatus.PAID) {
+    if (uiState.paymentStatus == PaymentStatus.PAID) {
         PaymentSuccessContent(
-            amount = checkoutUiState.total,
+            amount = uiState.totalPrice.toLong(),
+            orderId = uiState.orderId,
             onDone = {
-                cartViewModel.clearCart()
-                navController.navigate(Screen.Home.route) {
-                    popUpTo(Screen.Home.route) { inclusive = true }
+                navController.navigate(Screen.OrderTracking.createRoute(uiState.orderId)) {
+                    popUpTo(Screen.Home.route) { inclusive = false }
                 }
             }
         )
@@ -94,91 +97,84 @@ fun CheckoutScreen(
                     LazyColumn(modifier = Modifier.weight(1f)) {
                         item {
                             SectionTitle("Địa chỉ nhận hàng")
-                            AddressCard(address)
+                            // UX: Cho phép người dùng sửa địa chỉ trực tiếp
+                            OutlinedTextField(
+                                value = uiState.deliveryAddress,
+                                onValueChange = { checkoutViewModel.onAddressChanged(it) },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text("Nhập địa chỉ giao hàng") },
+                                leadingIcon = { Icon(Icons.Default.LocationOn, null, tint = Primary) },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Primary)
+                            )
                             
                             Spacer(modifier = Modifier.height(16.dp))
                             
                             SectionTitle("Phương thức thanh toán")
-                            PaymentMethodsSection(checkoutViewModel, checkoutUiState)
+                            PaymentMethodsSection(checkoutViewModel, uiState)
                             
                             // Hiển thị mã VietQR nếu chọn chuyển khoản
-                            AnimatedVisibility(visible = checkoutUiState.selectedPaymentMethod == PaymentMethod.BANK_TRANSFER) {
+                            AnimatedVisibility(visible = uiState.selectedPaymentMethod == PaymentMethod.BANK_TRANSFER) {
                                 BankQRCard(
-                                    account = checkoutUiState.bankAccount,
-                                    amount = checkoutUiState.total,
-                                    orderId = checkoutUiState.orderId
+                                    account = uiState.bankAccount,
+                                    amount = uiState.totalPrice.toLong(),
+                                    orderId = uiState.orderId,
+                                    onSimulateSuccess = { checkoutViewModel.simulatePaymentSuccess() }
                                 )
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
                             
                             SectionTitle("Tóm tắt đơn hàng")
-                            OrderSummaryCard(cartViewModel)
+                            OrderSummaryCard(uiState.cartItems, uiState.totalPrice)
                         }
                     }
 
+                    // Nút Đặt hàng với UX Loading & Disable
                     Button(
-                        onClick = {
-                            checkoutViewModel.processPayment(
-                                customerName = userProfile.name.ifBlank { "Khách hàng" },
-                                items = cartViewModel.cartItems.map { it.foodItem.name },
-                                address = address
-                            )
-                        },
+                        onClick = { checkoutViewModel.placeOrder() },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 16.dp)
                             .height(56.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Primary),
-                        enabled = !checkoutUiState.isLoading
+                        enabled = !uiState.isLoading
                     ) {
-                        if (checkoutUiState.isLoading) {
+                        if (uiState.isLoading) {
                             CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                         } else {
-                            val btnText = if (checkoutUiState.selectedPaymentMethod == PaymentMethod.CASH_ON_DELIVERY) 
-                                "Đặt hàng ngay (COD)" else "Xác nhận đã chuyển khoản"
+                            val btnText = if (uiState.selectedPaymentMethod == PaymentMethod.CASH_ON_DELIVERY) 
+                                "Đặt đơn hàng ngay" else "Tôi đã chuyển khoản thành công"
                             Text(btnText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
 
-                // Loading Overlay khi đang xử lý
-                if (checkoutUiState.isLoading) {
+                // Loading Overlay toàn màn hình (UX: Ngăn tương tác khi đang xử lý quan trọng)
+                if (uiState.isLoading) {
                     Surface(
-                        color = Color.Black.copy(alpha = 0.5f),
+                        color = Color.Black.copy(alpha = 0.3f),
                         modifier = Modifier.fillMaxSize()
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                CircularProgressIndicator(color = Primary)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text("Đang xử lý đơn hàng...", color = Color.White)
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    CircularProgressIndicator(color = Primary)
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text("Đang xử lý đơn hàng...", fontWeight = FontWeight.Medium)
+                                }
                             }
                         }
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun SectionTitle(title: String) {
-    Text(text = title, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.padding(vertical = 8.dp))
-}
-
-@Composable
-fun AddressCard(address: String) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F7F7))
-    ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.LocationOn, contentDescription = null, tint = Primary)
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(address, modifier = Modifier.weight(1f), fontSize = 14.sp)
         }
     }
 }
@@ -193,12 +189,117 @@ fun PaymentMethodsSection(viewModel: CheckoutViewModel, uiState: com.foddy.app.p
             onSelect = { viewModel.selectPaymentMethod(PaymentMethod.CASH_ON_DELIVERY) }
         )
         PaymentOption(
-            title = "Chuyển khoản VietQR",
+            title = "Chuyển khoản VietQR (Nhanh chóng)",
             icon = "🏦",
             isSelected = uiState.selectedPaymentMethod == PaymentMethod.BANK_TRANSFER,
             onSelect = { viewModel.selectPaymentMethod(PaymentMethod.BANK_TRANSFER) }
         )
     }
+}
+
+@Composable
+fun OrderSummaryCard(items: List<com.foddy.app.domain.model.CartItem>, total: Double) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F7F7))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            items.forEach { item ->
+                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Text("${item.quantity}x ${item.foodItem.name}", modifier = Modifier.weight(1f), fontSize = 14.sp)
+                    Text("${(item.foodItem.price * item.quantity).toInt()}đ", fontSize = 14.sp)
+                }
+            }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Text("Tổng thanh toán", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("${total.toInt()}đ", fontWeight = FontWeight.Bold, color = Primary, fontSize = 18.sp)
+            }
+        }
+    }
+}
+
+@Composable
+fun BankQRCard(
+    account: com.foddy.app.domain.model.BankAccount?,
+    amount: Long,
+    orderId: String,
+    onSimulateSuccess: () -> Unit = {}
+) {
+    Card(
+        modifier = Modifier.padding(top = 12.dp).fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF9C4))
+    ) {
+        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Quét mã VietQR để thanh toán", fontWeight = FontWeight.Bold, color = Color.DarkGray)
+            
+            val qrBitmap = remember(orderId) { 
+                account?.let { QRGenerator.generateVietQRBitmap(it, orderId, amount) } 
+            }
+            
+            qrBitmap?.let {
+                Image(
+                    bitmap = it.asImageBitmap(),
+                    contentDescription = "QR",
+                    modifier = Modifier.size(220.dp).padding(8.dp).clip(RoundedCornerShape(8.dp))
+                )
+            }
+
+            Text("Nội dung chuyển khoản:", fontSize = 12.sp)
+            Text(orderId, fontWeight = FontWeight.ExtraBold, color = Primary, fontSize = 20.sp)
+            Text("Số tiền: ${amount.formatVND()}", fontWeight = FontWeight.Bold)
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Button(
+                onClick = onSimulateSuccess,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD600)),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.height(36.dp)
+            ) {
+                Text("Simulate Success (Admin)", color = Color.Black, fontSize = 12.sp)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("(Hệ thống sẽ tự động xác nhận sau khi nhận được tiền)", fontSize = 11.sp, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
+fun PaymentSuccessContent(amount: Long, orderId: String, onDone: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(120.dp), tint = Primary)
+        Spacer(modifier = Modifier.height(24.dp))
+        Text("Tuyệt vời!", fontWeight = FontWeight.Bold, fontSize = 28.sp, color = Primary)
+        Text("Đơn hàng của bạn đã được tiếp nhận", textAlign = TextAlign.Center)
+        Text("Mã đơn: $orderId", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
+        Text("Tổng thanh toán: ${amount.formatVND()}", modifier = Modifier.padding(top = 16.dp), fontWeight = FontWeight.Bold)
+        
+        Button(
+            onClick = onDone, 
+            modifier = Modifier.padding(top = 48.dp).fillMaxWidth().height(56.dp), 
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Primary)
+        ) {
+            Text("Theo dõi đơn hàng", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun SectionTitle(title: String) {
+    Text(
+        text = title,
+        fontWeight = FontWeight.Bold,
+        fontSize = 16.sp,
+        modifier = Modifier.padding(vertical = 8.dp)
+    )
 }
 
 @Composable
@@ -212,76 +313,13 @@ fun PaymentOption(title: String, icon: String, isSelected: Boolean, onSelect: ()
             .clickable { onSelect() }
             .padding(8.dp)
     ) {
-        RadioButton(selected = isSelected, onClick = onSelect, colors = RadioButtonDefaults.colors(selectedColor = Primary))
+        RadioButton(
+            selected = isSelected,
+            onClick = onSelect,
+            colors = RadioButtonDefaults.colors(selectedColor = Primary)
+        )
         Text(icon, fontSize = 20.sp, modifier = Modifier.padding(horizontal = 8.dp))
         Text(title, fontSize = 15.sp, modifier = Modifier.weight(1f))
-    }
-}
-
-@Composable
-fun BankQRCard(account: com.foddy.app.domain.model.BankAccount?, amount: Long, orderId: String) {
-    Card(
-        modifier = Modifier.padding(top = 12.dp).fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF9C4))
-    ) {
-        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Quét mã để thanh toán", fontWeight = FontWeight.Bold, color = Color.DarkGray)
-            
-            val qrBitmap = remember(orderId) { 
-                account?.let { QRGenerator.generateVietQRBitmap(it, orderId, amount) } 
-            }
-            
-            qrBitmap?.let {
-                Image(
-                    bitmap = it.asImageBitmap(),
-                    contentDescription = "QR",
-                    modifier = Modifier.size(200.dp).padding(8.dp).clip(RoundedCornerShape(8.dp))
-                )
-            }
-
-            Text("Nội dung: FODDY$orderId", fontWeight = FontWeight.ExtraBold, color = Primary)
-            Text("Số tiền: ${amount.formatVND()}", fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-fun OrderSummaryCard(cartViewModel: CartViewModel) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F7F7))
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            cartViewModel.cartItems.forEach { item ->
-                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                    Text("${item.quantity}x ${item.foodItem.name}", modifier = Modifier.weight(1f), fontSize = 14.sp)
-                    Text("${(item.foodItem.price * item.quantity).toInt()}đ", fontSize = 14.sp)
-                }
-            }
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Text("Tổng cộng", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Text("${cartViewModel.totalPrice.toInt()}đ", fontWeight = FontWeight.Bold, color = Primary, fontSize = 18.sp)
-            }
-        }
-    }
-}
-
-@Composable
-fun PaymentSuccessContent(amount: Long, onDone: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(100.dp), tint = Primary)
-        Spacer(modifier = Modifier.height(16.dp))
-        Text("Đặt hàng thành công!", fontWeight = FontWeight.Bold, fontSize = 24.sp, textAlign = TextAlign.Center)
-        Text("Tổng thanh toán: ${amount.formatVND()}", modifier = Modifier.padding(top = 8.dp))
-        Button(onClick = onDone, modifier = Modifier.padding(top = 32.dp).fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-            Text("Về trang chủ")
-        }
     }
 }
 

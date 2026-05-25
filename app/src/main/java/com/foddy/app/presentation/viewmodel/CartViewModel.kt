@@ -1,43 +1,43 @@
 package com.foddy.app.presentation.viewmodel
 
-import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.foddy.app.domain.model.CartItem
 import com.foddy.app.domain.model.FoodItem
+import com.foddy.app.domain.repository.CartRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class CartViewModel @Inject constructor() : ViewModel() {
-    private val _cartItems = mutableStateListOf<CartItem>()
-    val cartItems: List<CartItem> = _cartItems
+class CartViewModel @Inject constructor(
+    private val cartRepository: CartRepository
+) : ViewModel() {
+
+    val cartItems: StateFlow<List<CartItem>> = cartRepository.getCartItems()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val totalPrice: StateFlow<Double> = cartRepository.getTotalPrice()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
     fun addToCart(foodItem: FoodItem) {
-        val existingItem = _cartItems.find { it.foodItem.id == foodItem.id }
-        if (existingItem != null) {
-            val index = _cartItems.indexOf(existingItem)
-            _cartItems[index] = existingItem.copy(quantity = existingItem.quantity + 1)
-        } else {
-            _cartItems.add(CartItem(foodItem, 1))
+        viewModelScope.launch {
+            cartRepository.addToCart(foodItem)
         }
     }
 
     fun removeFromCart(foodItem: FoodItem) {
-        val existingItem = _cartItems.find { it.foodItem.id == foodItem.id }
-        if (existingItem != null) {
-            val index = _cartItems.indexOf(existingItem)
-            if (existingItem.quantity > 1) {
-                _cartItems[index] = existingItem.copy(quantity = existingItem.quantity - 1)
-            } else {
-                _cartItems.removeAt(index)
-            }
+        viewModelScope.launch {
+            cartRepository.removeFromCart(foodItem)
         }
     }
 
     fun clearCart() {
-        _cartItems.clear()
+        viewModelScope.launch {
+            cartRepository.clearCart()
+        }
     }
-
-    val totalPrice: Double
-        get() = _cartItems.sumOf { it.foodItem.price * it.quantity }
 }

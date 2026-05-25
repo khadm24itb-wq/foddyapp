@@ -30,8 +30,8 @@ class UserViewModel @Inject constructor(
 
     // Compatibility property for existing UI screens
     val user: StateFlow<User> = _uiState
-        .map { it.user ?: User("", "", false) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), User("", "", false))
+        .map { it.user ?: User("", "") }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), User("", ""))
 
     init {
         loadUser()

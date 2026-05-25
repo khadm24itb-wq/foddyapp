@@ -5,11 +5,14 @@ import androidx.lifecycle.viewModelScope
 import com.foddy.app.domain.model.OrderRequest
 import com.foddy.app.domain.repository.OrderRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
 
@@ -22,6 +25,8 @@ class OrderViewModel @Inject constructor(
 
     private val _currentOrder = MutableStateFlow<OrderRequest?>(null)
     val currentOrder: StateFlow<OrderRequest?> = _currentOrder.asStateFlow()
+
+    private var simulationJob: Job? = null
 
     init {
         observeOrders()
@@ -42,6 +47,30 @@ class OrderViewModel @Inject constructor(
         }
     }
 
+    fun startLocationSimulation(orderId: String) {
+        simulationJob?.cancel()
+        simulationJob = viewModelScope.launch {
+            // Demo path from a point in Hanoi to another
+            val startLat = 21.0285
+            val startLng = 105.8542
+            val endLat = 21.0400
+            val endLng = 105.8600
+            val steps = 50
+            
+            for (i in 0..steps) {
+                val currentLat = startLat + (endLat - startLat) * (i.toDouble() / steps)
+                val currentLng = startLng + (endLng - startLng) * (i.toDouble() / steps)
+                updateDriverLocation(orderId, currentLat, currentLng)
+                delay(1500) // Update every 1.5s for "smooth" real-time feel
+            }
+        }
+    }
+
+    fun stopLocationSimulation() {
+        simulationJob?.cancel()
+        simulationJob = null
+    }
+
     fun placeOrder(order: OrderRequest, userId: String) {
         val finalOrder = order.copy(
             id = UUID.randomUUID().toString().substring(0, 8),
@@ -52,7 +81,7 @@ class OrderViewModel @Inject constructor(
             try {
                 orderRepository.placeOrder(finalOrder)
                 // Once placed, start observing this specific order for status updates
-                observeOrderById(finalOrder.id)
+                trackOrder(finalOrder.id)
             } catch (e: Exception) {
                 // In a real app, handle error (e.g., save locally or show message)
                 println("Error placing order: ${e.message}")
@@ -60,7 +89,7 @@ class OrderViewModel @Inject constructor(
         }
     }
 
-    private fun observeOrderById(orderId: String) {
+    fun trackOrder(orderId: String) {
         viewModelScope.launch {
             orderRepository.getOrderById(orderId).collectLatest { updatedOrder ->
                 if (updatedOrder != null) {
@@ -93,9 +122,10 @@ class OrderViewModel @Inject constructor(
     fun updateOrderStatus(orderId: String, status: String) {
         viewModelScope.launch {
             try {
+                Timber.d("Updating order $orderId status to $status")
                 orderRepository.updateOrderStatus(orderId, status)
             } catch (e: Exception) {
-                println("Error updating status: ${e.message}")
+                Timber.e(e, "Error updating status")
             }
         }
     }
