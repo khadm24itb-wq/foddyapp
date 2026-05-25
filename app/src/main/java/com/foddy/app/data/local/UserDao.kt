@@ -8,6 +8,7 @@ import com.foddy.app.data.model.UserEntity
 
 @Dao
 interface UserDao {
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUser(user: UserEntity)
 
@@ -16,4 +17,13 @@ interface UserDao {
 
     @Query("DELETE FROM users")
     suspend fun clearUser()
+
+    @Query("SELECT * FROM users WHERE email = :email LIMIT 1")
+    suspend fun getUserByEmail(email: String): UserEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun registerUser(user: UserEntity)
+
+    @Query("UPDATE users SET name = :name WHERE email = :email")
+    suspend fun updateName(email: String, name: String)
 }
