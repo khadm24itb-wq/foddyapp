@@ -17,6 +17,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.foddy.app.presentation.navigation.Screen
@@ -27,7 +28,7 @@ import com.foddy.app.presentation.ui.theme.Primary
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(navController: NavController, userViewModel: UserViewModel) {
-    val userProfile by userViewModel.user.collectAsState()
+    val userProfile by userViewModel.user.collectAsStateWithLifecycle()
     var showEditDialog by remember { mutableStateOf(false) }
 
     var editName by remember { mutableStateOf(userProfile.name) }

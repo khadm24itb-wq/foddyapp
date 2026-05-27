@@ -8,7 +8,7 @@ data class CartItemEntity(
     @PrimaryKey val foodId: String,
     val name: String,
     val price: Double,
-    val imageRes: String,
+    val image: String,
     val quantity: Int,
     val restaurantId: String = ""
 )

@@ -6,7 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foddy.app.domain.model.OrderRequest
 import com.foddy.app.presentation.viewmodel.OrderViewModel
 import com.foddy.app.presentation.ui.theme.LightGray
@@ -23,7 +24,12 @@ import com.foddy.app.presentation.ui.theme.Primary
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OrdersHistoryScreen(navController: NavController, orderViewModel: OrderViewModel) {
-    val orders by orderViewModel.pendingOrders.collectAsState()
+    val orders by orderViewModel.userOrders.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        // Assume we have a way to get current user ID, for now using demo
+        orderViewModel.listenToUserOrders("user_001")
+    }
 
     Scaffold(
         topBar = {
@@ -64,7 +70,7 @@ fun OrderHistoryCard(order: OrderRequest) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(text = order.restaurantName, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text(text = "${order.totalAmount.toInt()}đ", fontWeight = FontWeight.Bold, color = Primary)
+                Text(text = "${order.totalPrice.toInt()}đ", fontWeight = FontWeight.Bold, color = Primary)
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(text = "Đơn hàng: #${order.id.takeLast(6)}", fontSize = 12.sp, color = Color.Gray)
@@ -75,10 +81,17 @@ fun OrderHistoryCard(order: OrderRequest) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = order.status,
+                    text = when(order.status) {
+                        "pending" -> "Đang chờ"
+                        "preparing" -> "Đang chuẩn bị"
+                        "delivering" -> "Đang giao"
+                        "completed" -> "Hoàn thành"
+                        else -> order.status
+                    },
                     color = when(order.status) {
-                        "Đã nhận" -> Color(0xFF4CAF50)
-                        "Đang giao" -> Color(0xFF2196F3)
+                        "completed" -> Color(0xFF4CAF50)
+                        "delivering", "preparing" -> Color(0xFF2196F3)
+                        "pending" -> Color(0xFFFF9800)
                         else -> Color(0xFFF44336)
                     },
                     fontSize = 14.sp,

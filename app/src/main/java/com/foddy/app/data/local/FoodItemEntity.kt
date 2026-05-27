@@ -10,8 +10,12 @@ data class FoodItemEntity(
     val description: String,
     val price: Double,
     val discountPrice: Double?,
-    val imageRes: String,
+    val image: String,
     val rating: Double,
     val calories: Int,
-    val isFlashSale: Boolean
+    val isFlashSale: Boolean,
+    val restaurantId: String,
+    val category: String,
+    val available: Boolean,
+    val soldCount: Int
 )

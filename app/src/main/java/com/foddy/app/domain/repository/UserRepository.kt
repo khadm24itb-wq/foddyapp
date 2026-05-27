@@ -9,5 +9,6 @@ interface UserRepository {
     suspend fun login(email: String, password: String): Result<User>
     suspend fun signInWithGoogle(idToken: String): Result<User>
     suspend fun updateName(name: String): Result<Unit>
+    suspend fun updateFcmToken(token: String): Result<Unit>
     suspend fun logout()
 }

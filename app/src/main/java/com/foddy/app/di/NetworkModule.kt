@@ -1,9 +1,13 @@
 package com.foddy.app.di
 
+import android.content.Context
 import com.foddy.app.data.network.PostService
+import com.foddy.app.data.util.ConnectivityManagerNetworkMonitor
+import com.foddy.app.data.util.NetworkMonitor
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -50,5 +54,11 @@ object NetworkModule {
     @Singleton
     fun providePostService(retrofit: Retrofit): PostService {
         return retrofit.create(PostService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideNetworkMonitor(@ApplicationContext context: Context): NetworkMonitor {
+        return ConnectivityManagerNetworkMonitor(context)
     }
 }

@@ -1,17 +1,16 @@
 package com.foddy.app.presentation.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,14 +21,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
-import com.foddy.app.data.DummyData
 import com.foddy.app.domain.model.FoodItem
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import com.foddy.app.presentation.viewmodel.CartViewModel
-import com.foddy.app.presentation.viewmodel.MenuViewModel
-import com.foddy.app.presentation.ui.theme.LightGray
+import com.foddy.app.domain.model.Restaurant
+import com.foddy.app.presentation.components.FoodleTopBar
+import com.foddy.app.presentation.viewmodel.*
 import com.foddy.app.presentation.ui.theme.Primary
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+import com.foddy.app.presentation.ui.state.UiState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,140 +36,255 @@ fun RestaurantDetailScreen(
     navController: NavController,
     restaurantId: String?,
     cartViewModel: CartViewModel,
-    menuViewModel: MenuViewModel
+    menuViewModel: MenuViewModel,
+    restaurantViewModel: RestaurantViewModel
 ) {
-    val menuItems by menuViewModel.foodItems.collectAsState()
-    val cartItems by cartViewModel.cartItems.collectAsState()
-    val totalPrice by cartViewModel.totalPrice.collectAsState()
-    
-    val restaurant = DummyData.restaurants.find { it.id == restaurantId } ?: return
-    // Sử dụng menu từ ViewModel nếu là nhà hàng chính (id=1), còn lại dùng dummy
-    val displayMenu = if (restaurant.id == "1") menuItems else restaurant.menu
+    var restaurant by remember { mutableStateOf<Restaurant?>(null) }
+    val menuUiState by menuViewModel.uiState.collectAsStateWithLifecycle()
+    val cartItems by cartViewModel.cartItems.collectAsStateWithLifecycle()
+    val totalPrice by cartViewModel.totalPrice.collectAsStateWithLifecycle()
+
+    LaunchedEffect(restaurantId) {
+        if (restaurantId != null) {
+            val uiState = restaurantViewModel.uiState.value
+            if (uiState is UiState.Success) {
+                restaurant = uiState.data.restaurants.find { it.id == restaurantId }
+            }
+            
+            if (restaurant == null) {
+                restaurant = restaurantViewModel.getRestaurantById(restaurantId)
+            }
+            
+            menuViewModel.observeMenu(restaurantId)
+        }
+    }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(text = restaurant.name) },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                    }
-                }
+            FoodleTopBar(
+                title = restaurant?.name ?: "Nhà hàng",
+                onBackClick = { navController.popBackStack() }
             )
         },
         bottomBar = {
             if (cartItems.isNotEmpty()) {
                 Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .clickable { navController.navigate("cart") },
-                    color = Primary,
-                    shape = RoundedCornerShape(12.dp),
-                    shadowElevation = 8.dp
+                    modifier = Modifier.fillMaxWidth(),
+                    shadowElevation = 8.dp,
+                    color = Color.White
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    Box(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .navigationBarsPadding()
                     ) {
-                        Text(
-                            text = "${cartItems.sumOf { it.quantity }} món",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Xem giỏ hàng",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${totalPrice.toInt()}đ",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Button(
+                            onClick = { navController.navigate("cart") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val count = cartItems.sumOf { it.quantity }
+                                Text(
+                                    text = "$count món",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Xem giỏ hàng",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${totalPrice.toInt()}đ",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-        ) {
-            item {
-                AsyncImage(
-                    model = restaurant.imageRes,
-                    contentDescription = restaurant.name,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                        .clip(RoundedCornerShape(16.dp)),
-                    contentScale = ContentScale.Crop
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(text = restaurant.name, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Star, contentDescription = null, tint = Primary)
-                        Text(text = restaurant.rating.toString(), fontWeight = FontWeight.Bold)
+        restaurant?.let { res ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                item {
+                    AsyncImage(
+                        model = res.image,
+                        contentDescription = res.name,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        contentScale = ContentScale.Crop
+                    )
+                    
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = res.name,
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFB300))
+                                Text(text = "${res.rating}", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        
+                        Text(
+                            text = "${res.category} • ${res.deliveryTime} • ${res.address}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.Gray
+                        )
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        AIReviewSummarySection()
+                        
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Text(text = "Thực đơn", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
                 }
-                Text(text = restaurant.description, color = Color.Gray)
-                Spacer(modifier = Modifier.height(24.dp))
-                Text(text = "Thực đơn", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
-            }
 
-            items(displayMenu) { foodItem ->
-                FoodItemCard(foodItem) {
-                    cartViewModel.addToCart(foodItem)
+                items(
+                    items = when (val state = menuUiState) {
+                        is UiState.Success -> state.data
+                        else -> emptyList()
+                    },
+                    key = { it.id }
+                ) { foodItem ->
+                    FoodDetailItem(foodItem) {
+                        cartViewModel.addToCart(foodItem)
+                    }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+                
+                item {
+                    Spacer(modifier = Modifier.height(80.dp))
+                }
+            }
+        } ?: Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Primary)
+        }
+    }
+}
+
+@Composable
+fun AIReviewSummarySection() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Primary.copy(alpha = 0.05f),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = Primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "Tóm tắt đánh giá bằng AI",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = Primary
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "\"Khách hàng đánh giá cao tốc độ giao hàng và hương vị đậm đà. Một số ý kiến cho rằng phần ăn hơi nhỏ so với giá tiền.\"",
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                color = Color.DarkGray
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                ReviewStat("Ưu điểm", "Vị ngon, Giao nhanh", Color(0xFF2E7D32))
+                ReviewStat("Cần cải thiện", "Giá hơi cao", Color(0xFFC62828))
             }
         }
     }
 }
 
 @Composable
-fun FoodItemCard(foodItem: FoodItem, onAddClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(2.dp)
+fun ReviewStat(label: String, value: String, color: Color) {
+    Column {
+        Text(label, fontSize = 11.sp, color = Color.Gray)
+        Text(value, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = color)
+    }
+}
+
+@Composable
+fun FoodDetailItem(foodItem: FoodItem, onAddClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Row(
-            modifier = Modifier
-                .padding(12.dp)
-                .fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = foodItem.imageRes,
-                contentDescription = foodItem.name,
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(RoundedCornerShape(8.dp)),
-                contentScale = ContentScale.Crop
-            )
-            Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = foodItem.name, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text(text = foodItem.description, fontSize = 12.sp, color = Color.Gray, maxLines = 2)
-                Text(text = "${foodItem.price.toInt()}đ", fontSize = 16.sp, color = Primary, fontWeight = FontWeight.Bold)
+                Text(text = foodItem.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                if (foodItem.description.isNotEmpty()) {
+                    Text(
+                        text = foodItem.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray,
+                        maxLines = 2
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "${foodItem.price.toInt()}đ",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Primary,
+                    fontWeight = FontWeight.Bold
+                )
             }
-            IconButton(
-                onClick = onAddClick,
-                colors = IconButtonDefaults.iconButtonColors(containerColor = Primary, contentColor = Color.White)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null)
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Box(contentAlignment = Alignment.BottomEnd) {
+                AsyncImage(
+                    model = foodItem.image,
+                    contentDescription = foodItem.name,
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop
+                )
+                
+                IconButton(
+                    onClick = onAddClick,
+                    modifier = Modifier
+                        .padding(4.dp)
+                        .size(32.dp)
+                        .background(Primary, RoundedCornerShape(8.dp))
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                }
             }
         }
+        HorizontalDivider(modifier = Modifier.padding(top = 16.dp), thickness = 0.5.dp, color = Color.LightGray)
     }
 }

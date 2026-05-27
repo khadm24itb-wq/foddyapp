@@ -3,7 +3,7 @@ package com.foddy.app.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.foddy.app.domain.model.User
-import com.foddy.app.domain.repository.UserRepository
+import com.foddy.app.domain.usecase.user.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +22,12 @@ data class UserUiState(
 
 @HiltViewModel
 class UserViewModel @Inject constructor(
-    private val userRepository: UserRepository
+    private val getCurrentUserUseCase: GetCurrentUserUseCase,
+    private val loginUseCase: LoginUseCase,
+    private val registerUseCase: RegisterUseCase,
+    private val signInWithGoogleUseCase: SignInWithGoogleUseCase,
+    private val updateNameUseCase: UpdateNameUseCase,
+    private val logoutUseCase: LogoutUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(UserUiState(isLoading = true))
@@ -40,7 +45,7 @@ class UserViewModel @Inject constructor(
     private fun loadUser() {
         viewModelScope.launch {
             try {
-                userRepository.getCurrentUser().collect { user ->
+                getCurrentUserUseCase().collect { user ->
                     _uiState.value = UserUiState(
                         user = user,
                         isLoading = false
@@ -57,7 +62,7 @@ class UserViewModel @Inject constructor(
 
     fun register(name: String, email: String, password: String, onComplete: (Boolean) -> Unit) {
         viewModelScope.launch {
-            userRepository.register(name, email, password)
+            registerUseCase(name, email, password)
                 .onSuccess {
                     onComplete(true)
                 }
@@ -69,7 +74,7 @@ class UserViewModel @Inject constructor(
 
     fun loginCloud(email: String, password: String, onComplete: (Boolean) -> Unit) {
         viewModelScope.launch {
-            userRepository.login(email, password)
+            loginUseCase(email, password)
                 .onSuccess {
                     onComplete(true)
                 }
@@ -82,7 +87,7 @@ class UserViewModel @Inject constructor(
     fun signInWithGoogle(idToken: String, onComplete: (Boolean) -> Unit) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-            userRepository.signInWithGoogle(idToken)
+            signInWithGoogleUseCase(idToken)
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(user = it, isLoading = false)
                     onComplete(true)
@@ -96,13 +101,13 @@ class UserViewModel @Inject constructor(
 
     fun updateProfile(newName: String) {
         viewModelScope.launch {
-            userRepository.updateName(newName)
+            updateNameUseCase(newName)
         }
     }
 
     fun logout() {
         viewModelScope.launch {
-            userRepository.logout()
+            logoutUseCase()
         }
     }
 }

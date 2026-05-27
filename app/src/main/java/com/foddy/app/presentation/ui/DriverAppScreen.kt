@@ -40,8 +40,8 @@ fun DriverAppScreen(navController: NavController, orderViewModel: OrderViewModel
         derivedStateOf {
             if (!isOnline) emptyList()
             else allOrders.filter { 
-                it.status == "pending" || 
-                (it.driverId == currentDriverId && (it.status == "accepted" || it.status == "delivering"))
+                it.status == "preparing" || 
+                (it.driverId == currentDriverId && (it.status == "delivering"))
             }
         }
     }
@@ -157,8 +157,7 @@ fun DriverAppScreen(navController: NavController, orderViewModel: OrderViewModel
                             key = { it.id }
                         ) { order ->
                             val statusLabel = when(order.status) {
-                                "pending" -> "ĐƠN MỚI"
-                                "accepted" -> "BẠN ĐÃ NHẬN"
+                                "preparing" -> "QUÁN ĐANG LÀM"
                                 "delivering" -> "ĐANG GIAO"
                                 else -> order.status
                             }
@@ -167,7 +166,7 @@ fun DriverAppScreen(navController: NavController, orderViewModel: OrderViewModel
                                 orderId = "#${order.id.takeLast(6)}",
                                 restaurant = order.restaurantName,
                                 address = order.address,
-                                price = "${order.totalAmount.toInt()}đ",
+                                price = "${order.totalPrice.toInt()}đ",
                                 status = statusLabel,
                                 isSimulating = order.status == "delivering",
                                 onSimulateToggle = {
@@ -176,15 +175,13 @@ fun DriverAppScreen(navController: NavController, orderViewModel: OrderViewModel
                                     }
                                 },
                                 buttonText = when(order.status) {
-                                    "pending" -> "Nhận đơn ngay"
-                                    "accepted" -> "Bắt đầu giao"
+                                    "preparing" -> "Đến lấy hàng"
                                     "delivering" -> "Hoàn thành"
                                     else -> "Đã xong"
                                 }
                             ) {
                                 when(order.status) {
-                                    "pending" -> orderViewModel.acceptOrder(order.id, currentDriverId, "Trần Văn Gấu")
-                                    "accepted" -> orderViewModel.updateOrderStatus(order.id, "delivering")
+                                    "preparing" -> orderViewModel.acceptOrder(order.id, currentDriverId, "Trần Văn Gấu")
                                     "delivering" -> {
                                         orderViewModel.stopLocationSimulation()
                                         orderViewModel.updateOrderStatus(order.id, "completed")

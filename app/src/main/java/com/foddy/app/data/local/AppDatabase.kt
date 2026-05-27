@@ -8,13 +8,15 @@ import com.foddy.app.data.model.UserEntity
     entities = [
         UserEntity::class,
         FoodItemEntity::class,
-        CartItemEntity::class
+        CartItemEntity::class,
+        RestaurantEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
     abstract fun foodItemDao(): FoodItemDao
     abstract fun cartDao(): CartDao
+    abstract fun restaurantDao(): RestaurantDao
 }

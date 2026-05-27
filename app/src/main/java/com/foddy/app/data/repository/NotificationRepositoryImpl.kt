@@ -37,7 +37,7 @@ class NotificationRepositoryImpl @Inject constructor(
                     "restaurantId" to restaurantId,
                     "orderId" to orderId,
                     "title" to "🆕 Đơn hàng mới!",
-                    "body" to "${orderInfo.customerName} đặt ${orderInfo.items.joinToString(", ")} - ${orderInfo.totalAmount.formatVND()}",
+                    "body" to "${orderInfo.customerName} đặt ${orderInfo.items.joinToString(", ")} - ${orderInfo.totalPrice.formatVND()}",
                     "type" to NotificationType.NEW_ORDER.name,
                     "timestamp" to System.currentTimeMillis()
                 )
@@ -59,7 +59,7 @@ class NotificationRepositoryImpl @Inject constructor(
     override suspend fun sendPaymentConfirmedNotification(
         restaurantId: String,
         orderId: String,
-        amount: Long
+        amount: Double
     ): Result<Unit> = runCatching {
         firestore.collection("notifications")
             .add(
@@ -141,7 +141,7 @@ class NotificationRepositoryImpl @Inject constructor(
         _notifications.value = listOf(notification) + _notifications.value
     }
     
-    private fun Long.formatVND() = 
+    private fun Double.formatVND() =
         java.text.NumberFormat.getNumberInstance(java.util.Locale("vi", "VN"))
             .format(this) + " đ"
 }

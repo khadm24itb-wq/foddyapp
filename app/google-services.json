@@ -12,7 +12,12 @@
           "package_name": "com.foddy.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "521569818566-5ap5nrgs84ghla349ialbnl3quf2f36i.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBqoZCawTyCNXZWVpB31W1eU00JsVf0Jz4"
@@ -20,7 +25,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "521569818566-5ap5nrgs84ghla349ialbnl3quf2f36i.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

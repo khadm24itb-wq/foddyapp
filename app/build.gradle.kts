@@ -1,13 +1,13 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.hilt)
     alias(libs.plugins.google.services)
-    id("com.google.firebase.crashlytics")
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.room)
-    alias(libs.plugins.secrets)
-    kotlin("kapt")
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -22,11 +22,20 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        val localProperties = Properties()
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localProperties.load(localPropertiesFile.inputStream())
+        }
+        val geminiApiKey = localProperties.getProperty("GEMINI_API_KEY") ?: ""
+        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -45,7 +54,6 @@ android {
 
     buildFeatures {
         compose = true
-        viewBinding = true
         buildConfig = true
     }
 
@@ -90,7 +98,6 @@ dependencies {
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.messaging)
     implementation(libs.firebase.auth)
-    implementation(libs.firebase.crashlytics)
     implementation(libs.play.services.auth)
 
     // Generative AI (Gemini)
@@ -99,9 +106,8 @@ dependencies {
     // Coil (Image Loading)
     implementation(libs.coil.compose)
 
-    // Maps
-    implementation(libs.maps.compose)
-    implementation(libs.play.services.maps)
+    // OpenStreetMap (Free Alternative to Google Maps)
+    implementation(libs.osmdroid)
 
     // QR Code Generation
     implementation(libs.zxing)
@@ -112,11 +118,11 @@ dependencies {
     // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
-    kapt(libs.room.compiler)
+    ksp(libs.room.compiler)
 
     // Hilt (Dependency Injection)
     implementation(libs.dagger.hilt.android)
-    kapt(libs.dagger.hilt.compiler)
+    ksp(libs.dagger.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
 
     // Testing

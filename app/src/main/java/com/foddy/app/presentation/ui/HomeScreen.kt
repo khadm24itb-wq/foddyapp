@@ -1,18 +1,17 @@
 package com.foddy.app.presentation.ui
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,164 +22,288 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.foddy.app.data.DummyData
-import com.foddy.app.domain.model.FoodItem
-import com.foddy.app.domain.model.Restaurant
+import com.foddy.app.presentation.components.CategoryChip
+import com.foddy.app.presentation.components.FoodCard
+import com.foddy.app.presentation.components.RestaurantListItem
 import com.foddy.app.presentation.navigation.Screen
-import com.foddy.app.presentation.viewmodel.MenuViewModel
-import com.foddy.app.presentation.viewmodel.RecommendationViewModel
-import com.foddy.app.presentation.viewmodel.RestaurantViewModel
-import com.foddy.app.presentation.viewmodel.RestaurantUiState
-import com.foddy.app.presentation.ui.theme.Primary
-import com.foddy.app.presentation.ui.components.ShimmerRestaurantItem
 import com.foddy.app.presentation.ui.components.ShimmerItem
+import com.foddy.app.presentation.ui.components.ShimmerRestaurantItem
+import com.foddy.app.presentation.ui.state.UiState
+import com.foddy.app.presentation.ui.theme.Primary
+import com.foddy.app.presentation.viewmodel.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    navController: NavController, 
-    menuViewModel: MenuViewModel,
-    recommendationViewModel: RecommendationViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
-    restaurantViewModel: com.foddy.app.presentation.viewmodel.RestaurantViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    navController: NavController,
+    menuViewModel: MenuViewModel = hiltViewModel(),
+    recommendationViewModel: RecommendationViewModel = hiltViewModel(),
+    restaurantViewModel: RestaurantViewModel = hiltViewModel(),
+    cartViewModel: CartViewModel = hiltViewModel(),
+    userViewModel: UserViewModel = hiltViewModel()
 ) {
-    val menuItems by menuViewModel.foodItems.collectAsState()
-    val aiRecommendations by recommendationViewModel.recommendations.collectAsState()
-    val isLoadingAi by recommendationViewModel.isLoading.collectAsState()
+    val menuItems by menuViewModel.foodItems.collectAsStateWithLifecycle()
+    val aiRecs by recommendationViewModel.aiRecs.collectAsStateWithLifecycle()
+    val isLoadingAi by recommendationViewModel.isLoading.collectAsStateWithLifecycle()
+    val restaurantUiState by restaurantViewModel.uiState.collectAsStateWithLifecycle()
+    val cartItems by cartViewModel.cartItems.collectAsStateWithLifecycle()
+    val userState by userViewModel.uiState.collectAsStateWithLifecycle()
     
-    val restaurantUiState by restaurantViewModel.uiState.collectAsState()
+    val notificationViewModel: NotificationViewModel = hiltViewModel()
+    val unreadCount by notificationViewModel.unreadCount.collectAsStateWithLifecycle()
     
-    val flashSaleItems = menuItems.filter { it.isFlashSale }
-    val scrollState = rememberScrollState()
+    LaunchedEffect(userState.user) {
+        val preferences = userState.user?.let { 
+            "Tên: ${it.name}, Địa chỉ: ${it.address}. Thích các món ăn đa dạng." 
+        } ?: "Thích đồ ăn cay, gà rán và trà sữa"
+        recommendationViewModel.fetchRecommendations(preferences)
+    }
+    
+    val flashSaleItems = remember(menuItems) {
+        menuItems.filter { it.isFlashSale }
+    }
+    var selectedCategory by remember { mutableStateOf("Tất cả") }
+    val categories = remember { DummyData.categories.map { it.name } }
 
-    // Kiểm tra khi cuộn đến cuối để load thêm
-    LaunchedEffect(scrollState.value) {
-        if (scrollState.value > 0 && scrollState.value == scrollState.maxValue) {
-            restaurantViewModel.loadMoreRestaurants()
+    val filteredRestaurants = remember(restaurantUiState, selectedCategory) {
+        if (restaurantUiState is UiState.Success) {
+            val data = (restaurantUiState as UiState.Success).data
+            if (selectedCategory == "Tất cả") {
+                data.restaurants
+            } else {
+                data.restaurants.filter { it.category == selectedCategory }
+            }
+        } else {
+            emptyList()
         }
     }
 
-    // Gọi AI gợi ý dựa trên sở thích mặc định hoặc lịch sử (giả lập)
-    LaunchedEffect(menuItems) {
-        if (menuItems.isNotEmpty()) {
-            recommendationViewModel.getAIRecommendations("Tôi thích món ăn Việt Nam truyền thống và đồ uống thanh mát", menuItems)
+    Scaffold(
+        topBar = {
+            HomeHeader(
+                cartCount = cartItems.size,
+                unreadNotifications = unreadCount,
+                onCartClick = { navController.navigate(Screen.Cart.route) },
+                onNotificationClick = { navController.navigate(Screen.Notifications.route) }
+            )
+        }
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .background(Color(0xFFF8F8F8)),
+            contentPadding = PaddingValues(bottom = 16.dp)
+        ) {
+            // Search Bar
+            item {
+                Box(modifier = Modifier.padding(16.dp)) {
+                    OutlinedTextField(
+                        value = "",
+                        onValueChange = {},
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { navController.navigate(Screen.Search.route) },
+                        placeholder = { Text("Bạn muốn ăn gì hôm nay?") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray) },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Primary,
+                            unfocusedBorderColor = Color.Transparent,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White,
+                            disabledContainerColor = Color.White,
+                            disabledBorderColor = Color.Transparent
+                        ),
+                        singleLine = true,
+                        enabled = false
+                    )
+                }
+            }
+
+            // Banner Carousel
+            item {
+                BannerCarousel()
+            }
+
+            item { Spacer(modifier = Modifier.height(24.dp)) }
+
+            // Categories
+            item {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(categories) { category ->
+                        CategoryChip(
+                            text = category,
+                            isSelected = selectedCategory == category,
+                            onClick = { selectedCategory = category }
+                        )
+                    }
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(24.dp)) }
+
+            // AI Recommendations Section
+            if (aiRecs.isNotEmpty() || isLoadingAi) {
+                item {
+                    SectionHeader(title = "Gợi ý AI ✨", subtitle = "Dựa trên sở thích của bạn")
+                }
+                
+                item {
+                    if (isLoadingAi) {
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            items(3) { 
+                                ShimmerItem(modifier = Modifier.width(160.dp).height(160.dp).clip(RoundedCornerShape(16.dp))) 
+                            }
+                        }
+                    } else {
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            aiRecs.forEach { rec ->
+                                items(rec.foodItems, key = { it.id }) { item ->
+                                    FoodCard(item) {
+                                        navController.navigate(Screen.RestaurantDetail.createRoute(item.restaurantId))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                item { Spacer(modifier = Modifier.height(24.dp)) }
+            }
+
+            // Flash Sale Section
+            if (flashSaleItems.isNotEmpty()) {
+                item {
+                    SectionHeader(title = "Flash Sale ⚡", subtitle = "Ưu đãi cực hời", titleColor = Color.Red)
+                }
+                item {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(flashSaleItems, key = { it.id }) { item ->
+                            FoodCard(item) {
+                                navController.navigate(Screen.RestaurantDetail.createRoute(item.restaurantId))
+                            }
+                        }
+                    }
+                }
+                item { Spacer(modifier = Modifier.height(24.dp)) }
+            }
+
+            // Nearby Restaurants Header
+            item {
+                SectionHeader(title = "Quán ăn gần bạn", subtitle = "Giao hàng siêu tốc")
+            }
+            
+            // Nearby Restaurants List
+            when (val state = restaurantUiState) {
+                is UiState.Loading -> {
+                    items(3) { 
+                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                            ShimmerRestaurantItem() 
+                        }
+                    }
+                }
+                is UiState.Success -> {
+                    items(filteredRestaurants, key = { it.id }) { restaurant ->
+                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                            RestaurantListItem(restaurant) {
+                                navController.navigate(Screen.RestaurantDetail.createRoute(restaurant.id))
+                            }
+                        }
+                    }
+                    
+                    if (state.data.isLoadingMore) {
+                        item {
+                            Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Primary)
+                            }
+                        }
+                    }
+                }
+                is UiState.Error -> {
+                    item {
+                        Text(text = "Đã có lỗi xảy ra: ${state.message}", modifier = Modifier.padding(16.dp))
+                    }
+                    item {
+                        Button(onClick = { restaurantViewModel.refresh() }, modifier = Modifier.padding(16.dp)) {
+                            Text("Thử lại")
+                        }
+                    }
+                }
+                else -> {}
+            }
+            
+            item { Spacer(modifier = Modifier.height(80.dp)) }
         }
     }
+}
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp)
+@Composable
+fun HomeHeader(
+    cartCount: Int,
+    unreadNotifications: Int = 0,
+    onCartClick: () -> Unit,
+    onNotificationClick: () -> Unit
+) {
+    Surface(
+        color = Color.White,
+        shadowElevation = 2.dp
     ) {
-        // Header
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .statusBarsPadding(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text(text = "Giao hàng đến", fontSize = 12.sp, color = Color.Gray)
-                Text(text = "Hà Nội, Việt Nam", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-            IconButton(onClick = { }) {
-                Icon(Icons.Default.Notifications, contentDescription = null)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Search Bar
-        OutlinedTextField(
-            value = "",
-            onValueChange = {},
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Tìm kiếm món ăn...") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedBorderColor = Color.LightGray,
-                focusedBorderColor = Primary
-            )
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // AI Recommendations Section
-        if (isLoadingAi) {
-            Text(text = "AI đang tìm món ngon cho bạn... ✨", fontSize = 14.sp, color = Color.Gray)
-            Spacer(modifier = Modifier.height(12.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(3) {
-                    ShimmerItem(modifier = Modifier.width(160.dp).height(160.dp))
+                Text(text = "Giao hàng đến", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Hà Nội, Việt Nam",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
-            Spacer(modifier = Modifier.height(24.dp))
-        } else if (aiRecommendations.isNotEmpty()) {
-            Text(text = "Gợi ý từ AI ✨", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6200EE))
-            Text(text = "Dựa trên sở thích của bạn", fontSize = 12.sp, color = Color.Gray)
-            Spacer(modifier = Modifier.height(12.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(aiRecommendations) { item ->
-                    FlashSaleCard(item)
-                }
-            }
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-
-        // Flash Sale Section
-        if (flashSaleItems.isNotEmpty()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(text = "Flash Sale ⚡", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Red)
-                Text(text = "Xem tất cả", fontSize = 14.sp, color = Primary)
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(flashSaleItems) { item ->
-                    FlashSaleCard(item)
-                }
-            }
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-
-        // Restaurants Section
-        Text(text = "Quán ăn gần bạn", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        when (val state = restaurantUiState) {
-            is RestaurantUiState.Loading -> {
-                repeat(3) {
-                    ShimmerRestaurantItem()
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-            }
-            is RestaurantUiState.Success -> {
-                state.restaurants.forEach { restaurant ->
-                    RestaurantCard(restaurant) {
-                        navController.navigate(Screen.RestaurantDetail.createRoute(restaurant.id))
+            
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                BadgedBox(
+                    badge = { if (cartCount > 0) Badge { Text("$cartCount") } }
+                ) {
+                    IconButton(
+                        onClick = onCartClick,
+                        modifier = Modifier.background(Color(0xFFF5F5F5), CircleShape)
+                    ) {
+                        Icon(Icons.Default.ShoppingCart, contentDescription = "Giỏ hàng", tint = Color.Black)
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
                 }
                 
-                if (state.isLoadingMore) {
-                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Primary)
-                    }
-                }
-            }
-            is RestaurantUiState.Error -> {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                BadgedBox(
+                    badge = { if (unreadNotifications > 0) Badge { Text("$unreadNotifications") } }
                 ) {
-                    Text(text = "Lỗi: ${state.message}", color = Color.Red)
-                    Button(onClick = { restaurantViewModel.refresh() }, colors = ButtonDefaults.buttonColors(containerColor = Primary)) {
-                        Text("Thử lại")
+                    IconButton(
+                        onClick = onNotificationClick,
+                        modifier = Modifier.background(Color(0xFFF5F5F5), CircleShape)
+                    ) {
+                        Icon(Icons.Default.Notifications, contentDescription = "Thông báo", tint = Color.Black)
                     }
                 }
             }
@@ -189,56 +312,57 @@ fun HomeScreen(
 }
 
 @Composable
-fun FlashSaleCard(item: FoodItem) {
-    Card(
-        modifier = Modifier.width(160.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(4.dp)
+fun SectionHeader(
+    title: String,
+    subtitle: String? = null,
+    titleColor: Color = Color.Black,
+    onSeeAllClick: (() -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Bottom
     ) {
         Column {
-            AsyncImage(
-                model = item.imageRes,
-                contentDescription = null,
-                modifier = Modifier.height(100.dp).fillMaxWidth(),
-                contentScale = ContentScale.Crop
-            )
-            Column(modifier = Modifier.padding(8.dp)) {
-                Text(text = item.name, fontWeight = FontWeight.Bold, maxLines = 1)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = "${item.discountPrice?.toInt()}đ", color = Primary, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "${item.price.toInt()}đ", fontSize = 10.sp, color = Color.Gray)
-                }
+            Text(text = title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = titleColor)
+            if (subtitle != null) {
+                Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             }
+        }
+        if (onSeeAllClick != null) {
+            Text(
+                text = "Xem tất cả",
+                modifier = Modifier.clickable { onSeeAllClick() },
+                style = MaterialTheme.typography.labelLarge,
+                color = Primary
+            )
         }
     }
 }
 
 @Composable
-fun RestaurantCard(restaurant: Restaurant, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(2.dp)
+fun BannerCarousel() {
+    val banners = listOf(
+        "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&q=80&w=1000",
+        "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=1000"
+    )
+    
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        items(banners) { bannerUrl ->
             AsyncImage(
-                model = restaurant.imageRes,
+                model = bannerUrl,
                 contentDescription = null,
-                modifier = Modifier.size(80.dp).clip(RoundedCornerShape(12.dp)),
+                modifier = Modifier
+                    .width(300.dp)
+                    .height(150.dp)
+                    .clip(RoundedCornerShape(16.dp)),
                 contentScale = ContentScale.Crop
             )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(text = restaurant.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text(text = restaurant.category, fontSize = 12.sp, color = Color.Gray)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFB300), modifier = Modifier.size(16.dp))
-                    Text(text = "${restaurant.rating} • ${restaurant.deliveryTime}", fontSize = 12.sp)
-                }
-            }
         }
     }
 }

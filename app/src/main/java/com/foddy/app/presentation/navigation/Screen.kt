@@ -17,6 +17,8 @@ sealed class Screen(val route: String) {
     }
     object OrdersHistory : Screen("orders_history")
     object Profile : Screen("profile")
+    object Search : Screen("search")
+    object Notifications : Screen("notifications")
     // New Roles
     object RestaurantAdmin : Screen("restaurant_admin")
     object DriverApp : Screen("driver_app")

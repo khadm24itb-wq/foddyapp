@@ -3,8 +3,10 @@ package com.foddy.app.data.repository
 import com.foddy.app.data.local.FoodItemDao
 import com.foddy.app.data.mapper.toDomain
 import com.foddy.app.data.mapper.toEntity
+import com.foddy.app.data.util.networkBoundResource
 import com.foddy.app.domain.model.FoodItem
 import com.foddy.app.domain.repository.MenuRepository
+import com.foddy.app.domain.util.Resource
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -12,6 +14,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
@@ -19,21 +22,33 @@ import javax.inject.Singleton
 
 @Singleton
 class MenuRepositoryImpl @Inject constructor(
-    private val foodItemDao: FoodItemDao
+    private val foodItemDao: FoodItemDao,
+    private val db: FirebaseFirestore
 ) : MenuRepository {
-    private val db = FirebaseFirestore.getInstance()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    override fun getMenuItems(): Flow<List<FoodItem>> = callbackFlow {
+    override fun getMenuItems(restaurantId: String?): Flow<List<FoodItem>> = callbackFlow {
         // Trả về dữ liệu từ local trước nếu có
         scope.launch {
-            val localItems = foodItemDao.getAllItems().map { it.toDomain() }
-            if (localItems.isNotEmpty()) {
-                trySend(localItems)
+            foodItemDao.getAllItems().collect { entities ->
+                val localItems = entities.map { it.toDomain() }
+                if (localItems.isNotEmpty()) {
+                    if (restaurantId == null) {
+                        trySend(localItems)
+                    } else {
+                        trySend(localItems.filter { it.restaurantId == restaurantId })
+                    }
+                }
             }
         }
 
-        val listener = db.collection("menu").addSnapshotListener { snapshot, e ->
+        val collection = if (restaurantId != null) {
+            db.collection("menu").whereEqualTo("restaurantId", restaurantId)
+        } else {
+            db.collection("menu")
+        }
+
+        val listener = collection.addSnapshotListener { snapshot, e ->
             if (e != null) {
                 close(e)
                 return@addSnapshotListener
@@ -43,10 +58,12 @@ class MenuRepositoryImpl @Inject constructor(
                     doc.toObject(FoodItem::class.java)?.copy(id = doc.id)
                 }
                 
-                // Cập nhật local database
-                scope.launch {
-                    foodItemDao.clearAll()
-                    foodItemDao.insertAll(items.map { it.toEntity() })
+                // Cập nhật local database (chỉ nếu lấy toàn bộ hoặc có logic sync phù hợp)
+                if (restaurantId == null) {
+                    scope.launch {
+                        foodItemDao.clearAll()
+                        foodItemDao.insertAll(items.map { it.toEntity() })
+                    }
                 }
 
                 trySend(items)
@@ -63,4 +80,30 @@ class MenuRepositoryImpl @Inject constructor(
     override suspend fun removeMenuItem(item: FoodItem) {
         db.collection("menu").document(item.id).delete().await()
     }
+
+    override fun getMenuItemsWithCache(restaurantId: String?): Flow<Resource<List<FoodItem>>> = networkBoundResource(
+        query = {
+            if (restaurantId == null) {
+                foodItemDao.getAllItems().map { entities -> entities.map { it.toDomain() } }
+            } else {
+                foodItemDao.getItemsByRestaurant(restaurantId).map { entities -> entities.map { it.toDomain() } }
+            }
+        },
+        fetch = {
+            val query = if (restaurantId != null) {
+                db.collection("menu").whereEqualTo("restaurantId", restaurantId)
+            } else {
+                db.collection("menu")
+            }
+            query.get().await().documents.mapNotNull { doc ->
+                doc.toObject(FoodItem::class.java)?.copy(id = doc.id)
+            }
+        },
+        saveFetchResult = { items ->
+            if (restaurantId == null) {
+                foodItemDao.clearAll()
+            }
+            foodItemDao.insertAll(items.map { it.toEntity() })
+        }
+    )
 }

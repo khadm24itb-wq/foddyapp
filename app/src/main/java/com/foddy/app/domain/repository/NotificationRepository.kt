@@ -29,7 +29,7 @@ interface NotificationRepository {
     suspend fun sendPaymentConfirmedNotification(
         restaurantId: String,
         orderId: String,
-        amount: Long
+        amount: Double
     ): Result<Unit>
     
     // Lắng nghe thông báo
@@ -43,7 +43,7 @@ data class OrderInfo(
     val orderId: String,
     val customerName: String,
     val items: List<String>,
-    val totalAmount: Long,
+    val totalPrice: Double,
     val deliveryAddress: String,
     val paymentMethod: String,
     val notes: String? = null

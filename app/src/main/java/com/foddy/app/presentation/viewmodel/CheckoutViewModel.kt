@@ -2,24 +2,17 @@ package com.foddy.app.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.foddy.app.domain.model.BankAccount
-import com.foddy.app.domain.model.CartItem
-import com.foddy.app.domain.model.OrderRequest
-import com.foddy.app.domain.model.PaymentMethod
-import com.foddy.app.domain.model.PaymentStatus
-import com.foddy.app.domain.repository.CartRepository
-import com.foddy.app.domain.repository.NotificationRepository
+import com.foddy.app.domain.model.*
 import com.foddy.app.domain.repository.OrderEvent
-import com.foddy.app.domain.repository.OrderRepository
-import com.foddy.app.domain.repository.UserRepository
+import com.foddy.app.domain.usecase.cart.ClearCartUseCase
+import com.foddy.app.domain.usecase.cart.GetCartItemsUseCase
+import com.foddy.app.domain.usecase.cart.GetTotalPriceUseCase
+import com.foddy.app.domain.usecase.notification.SendOrderStatusNotificationUseCase
+import com.foddy.app.domain.usecase.order.PlaceOrderUseCase
+import com.foddy.app.domain.usecase.user.GetCurrentUserUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
@@ -47,10 +40,12 @@ sealed class CheckoutUiEffect {
 
 @HiltViewModel
 class CheckoutViewModel @Inject constructor(
-    private val cartRepository: CartRepository,
-    private val userRepository: UserRepository,
-    private val orderRepository: OrderRepository,
-    private val notificationRepository: NotificationRepository
+    private val getCartItemsUseCase: GetCartItemsUseCase,
+    private val getTotalPriceUseCase: GetTotalPriceUseCase,
+    private val getCurrentUserUseCase: GetCurrentUserUseCase,
+    private val placeOrderUseCase: PlaceOrderUseCase,
+    private val sendOrderStatusNotificationUseCase: SendOrderStatusNotificationUseCase,
+    private val clearCartUseCase: ClearCartUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CheckoutUiState())
@@ -67,19 +62,19 @@ class CheckoutViewModel @Inject constructor(
     private fun observeCartAndUser() {
         // Observe Cart Items
         viewModelScope.launch {
-            cartRepository.getCartItems().collectLatest { items ->
+            getCartItemsUseCase().collectLatest { items ->
                 _uiState.update { it.copy(cartItems = items) }
             }
         }
         // Observe Total Price
         viewModelScope.launch {
-            cartRepository.getTotalPrice().collectLatest { total ->
+            getTotalPriceUseCase().collectLatest { total ->
                 _uiState.update { it.copy(totalPrice = total) }
             }
         }
-        // Observe User Profile (Real-time từ Firestore/Room)
+        // Observe User Profile
         viewModelScope.launch {
-            userRepository.getCurrentUser().collectLatest { user ->
+            getCurrentUserUseCase().collectLatest { user ->
                 user?.let {
                     _uiState.update { state ->
                         state.copy(
@@ -124,7 +119,6 @@ class CheckoutViewModel @Inject constructor(
     fun placeOrder() {
         val currentState = _uiState.value
         
-        // 1. Validation (UX: Thông báo lỗi cụ thể)
         if (currentState.deliveryAddress.isBlank()) {
             _uiState.update { it.copy(error = "Vui lòng nhập địa chỉ giao hàng") }
             return
@@ -136,17 +130,16 @@ class CheckoutViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            // 2. Loading State (UX: Disable button, show progress)
             _uiState.update { it.copy(isLoading = true, error = null) }
             
             try {
-                // Tạo OrderRequest chuẩn từ dữ liệu hiện tại
                 val order = OrderRequest(
                     id = currentState.orderId,
-                    customerId = currentState.customerId,
+                    userId = currentState.customerId,
+                    restaurantId = currentState.cartItems.firstOrNull()?.foodItem?.restaurantId ?: "rest_001",
                     restaurantName = "Foddy Store",
                     address = currentState.deliveryAddress,
-                    totalAmount = currentState.totalPrice,
+                    totalPrice = currentState.totalPrice,
                     items = currentState.cartItems,
                     paymentMethod = when(currentState.selectedPaymentMethod) {
                         PaymentMethod.CASH_ON_DELIVERY -> "COD"
@@ -155,25 +148,20 @@ class CheckoutViewModel @Inject constructor(
                     status = "pending"
                 )
 
-                // 3. Thực hiện đặt hàng qua Repository (Firebase + Offline support)
-                orderRepository.placeOrder(order)
+                placeOrderUseCase(order)
 
-                // 4. Gửi thông báo Notification
-                notificationRepository.sendOrderStatusNotification(
-                    userId = currentState.customerName,
+                sendOrderStatusNotificationUseCase(
+                    userId = currentState.customerId,
                     orderId = currentState.orderId,
                     event = OrderEvent.OrderConfirmed
                 )
 
-                // 5. Xóa giỏ hàng (Xử lý Offline-first thông qua Room)
-                cartRepository.clearCart()
+                clearCartUseCase()
 
-                // 6. Thành công: Chuyển trạng thái và điều hướng
                 _uiState.update { it.copy(isLoading = false, paymentStatus = PaymentStatus.PAID) }
                 _uiEffect.send(CheckoutUiEffect.NavigateToSuccess)
 
             } catch (e: Exception) {
-                // 7. Error Handling chuyên nghiệp
                 _uiState.update { it.copy(isLoading = false, error = "Đặt hàng thất bại: ${e.message}") }
                 _uiEffect.send(CheckoutUiEffect.ShowError(e.message ?: "Lỗi hệ thống, vui lòng thử lại"))
             }

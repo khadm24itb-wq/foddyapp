@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
@@ -27,6 +28,7 @@ import com.foddy.app.presentation.ui.theme.Primary
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
@@ -36,7 +38,7 @@ fun LoginScreen(navController: NavController, userViewModel: UserViewModel) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val context = LocalContext.current
-    var isLoading by remember { mutableStateOf(false) }
+    val uiState by userViewModel.uiState.collectAsStateWithLifecycle()
 
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -45,13 +47,9 @@ fun LoginScreen(navController: NavController, userViewModel: UserViewModel) {
         try {
             val account = task.getResult(ApiException::class.java)
             account?.idToken?.let { token ->
-                isLoading = true
                 userViewModel.signInWithGoogle(token) { success ->
-                    isLoading = false
                     if (success) {
-                        navController.navigate(Screen.Home.route) {
-                            popUpTo(Screen.Login.route) { inclusive = true }
-                        }
+                        navigateToRoleHome(navController, userViewModel)
                     } else {
                         Toast.makeText(context, "Google Sign-In failed", Toast.LENGTH_SHORT).show()
                     }
@@ -62,102 +60,118 @@ fun LoginScreen(navController: NavController, userViewModel: UserViewModel) {
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .imePadding()
-            .padding(24.dp)
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = "Đăng nhập",
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.Black
-        )
-        Spacer(modifier = Modifier.height(32.dp))
+    Scaffold { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(24.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "Đăng nhập",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
+            )
+            Spacer(modifier = Modifier.height(32.dp))
 
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = { Text("Email") },
-            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
-            modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("Email") },
+                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                shape = RoundedCornerShape(12.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Mật khẩu") },
-            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
-        )
-        Spacer(modifier = Modifier.height(32.dp))
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Mật khẩu") },
+                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                shape = RoundedCornerShape(12.dp)
+            )
+            Spacer(modifier = Modifier.height(32.dp))
 
-        if (isLoading) {
-            CircularProgressIndicator(color = Primary)
-        } else {
-            Button(
-                onClick = {
-                    if (email.isNotEmpty() && password.isNotEmpty()) {
-                        isLoading = true
-                        // GỌI FIREBASE ĐỂ XÁC THỰC
-                        userViewModel.loginCloud(email, password) { isSuccess ->
-                            isLoading = false
-                            if (isSuccess) {
-                                // CHỈ KHI THÀNH CÔNG MỚI CHO VÀO TRONG
-                                navController.navigate(Screen.Home.route) {
-                                    popUpTo(Screen.Login.route) { inclusive = true }
+            if (uiState.isLoading) {
+                CircularProgressIndicator(color = Primary)
+            } else {
+                Button(
+                    onClick = {
+                        if (email.isNotEmpty() && password.isNotEmpty()) {
+                            userViewModel.loginCloud(email, password) { isSuccess ->
+                                if (isSuccess) {
+                                    navigateToRoleHome(navController, userViewModel)
+                                } else {
+                                    Toast.makeText(context, "Đăng nhập thất bại", Toast.LENGTH_SHORT).show()
                                 }
                             }
+                        } else {
+                            Toast.makeText(context, "Vui lòng nhập đầy đủ thông tin", Toast.LENGTH_SHORT).show()
                         }
-                    } else {
-                        Toast.makeText(context, "Vui lòng nhập đầy đủ thông tin", Toast.LENGTH_SHORT).show()
-                    }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(text = "Đăng nhập", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedButton(
+                onClick = {
+                    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                        .requestIdToken(context.getString(com.foddy.app.R.string.default_web_client_id))
+                        .requestEmail()
+                        .build()
+                    val googleSignInClient = GoogleSignIn.getClient(context, gso)
+                    googleSignInLauncher.launch(googleSignInClient.signInIntent)
                 },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Black)
             ) {
-                Text(text = "Đăng nhập", color = Color.White, modifier = Modifier.padding(8.dp))
+                Text(text = "Đăng nhập với Google", fontWeight = FontWeight.Medium)
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Row {
+                Text(text = "Chưa có tài khoản? ")
+                Text(
+                    text = "Đăng ký ngay",
+                    color = Primary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable {
+                        navController.navigate(Screen.Register.route)
+                    }
+                )
             }
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedButton(
-            onClick = {
-                val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                    .requestServerAuthCode(context.getString(com.foddy.app.R.string.default_web_client_id))
-                    .requestEmail()
-                    .build()
-                val googleSignInClient = GoogleSignIn.getClient(context, gso)
-                googleSignInLauncher.launch(googleSignInClient.signInIntent)
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Black)
-        ) {
-            Text(text = "Đăng nhập với Google", modifier = Modifier.padding(8.dp))
+private fun navigateToRoleHome(navController: NavController, userViewModel: UserViewModel) {
+    val user = userViewModel.uiState.value.user
+    if (user != null) {
+        val route = when (user.role) {
+            "DRIVER" -> Screen.DriverApp.route
+            "RESTAURANT" -> Screen.RestaurantAdmin.route
+            "ADMIN" -> Screen.RestaurantAdmin.route
+            else -> Screen.Home.route
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Row {
-            Text(text = "Chưa có tài khoản? ")
-            Text(
-                text = "Đăng ký ngay",
-                color = Primary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.clickable {
-                    navController.navigate(Screen.Register.route)
-                }
-            )
+        navController.navigate(route) {
+            popUpTo(Screen.Login.route) { inclusive = true }
         }
     }
 }

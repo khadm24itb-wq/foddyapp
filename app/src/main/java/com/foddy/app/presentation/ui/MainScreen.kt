@@ -1,101 +1,81 @@
 package com.foddy.app.presentation.ui
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import com.foddy.app.domain.model.Post
-import com.foddy.app.presentation.viewmodel.MainViewModel
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.foddy.app.presentation.navigation.Screen
+import com.foddy.app.presentation.ui.components.BottomNavigationBar
+import com.foddy.app.presentation.viewmodel.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(
-    viewModel: MainViewModel,
-    onPostClick: (Int) -> Unit
-) {
-    val uiState by viewModel.uiState.collectAsState()
-    val pullToRefreshState = rememberPullToRefreshState()
+fun MainScreen() {
+    val navController = rememberNavController()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+    
+    val userViewModel: UserViewModel = hiltViewModel()
+    val menuViewModel: MenuViewModel = hiltViewModel()
+    val cartViewModel: CartViewModel = hiltViewModel()
+    val orderViewModel: OrderViewModel = hiltViewModel()
+    val restaurantViewModel: RestaurantViewModel = hiltViewModel()
+    val recommendationViewModel: RecommendationViewModel = hiltViewModel()
+    val notificationViewModel: NotificationViewModel = hiltViewModel()
+
+    val showBottomBar = currentRoute in listOf(
+        Screen.Home.route,
+        Screen.OrdersHistory.route,
+        Screen.Profile.route,
+        Screen.AIAssistant.route
+    )
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Foddy Pro - Posts") }
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .padding(paddingValues)
-                .fillMaxSize()
-        ) {
-            OutlinedTextField(
-                value = uiState.searchQuery,
-                onValueChange = { viewModel.onSearchQueryChanged(it) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                placeholder = { Text("Search posts...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
-            )
-
-            PullToRefreshBox(
-                isRefreshing = uiState.isRefreshing,
-                onRefresh = { viewModel.fetchPosts(isRefreshing = true) },
-                state = pullToRefreshState,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                if (uiState.isLoading && !uiState.isRefreshing) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                } else if (uiState.error != null) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(text = "Error: ${uiState.error}", color = MaterialTheme.colorScheme.error)
-                            Button(onClick = { viewModel.fetchPosts() }) {
-                                Text("Retry")
-                            }
-                        }
-                    }
-                } else {
-                    val filteredPosts = uiState.posts.filter {
-                        it.title.contains(uiState.searchQuery, ignoreCase = true) ||
-                                it.body.contains(uiState.searchQuery, ignoreCase = true)
-                    }
-
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(filteredPosts) { post ->
-                            PostItem(post = post, onClick = { onPostClick(post.id) })
-                        }
-                    }
-                }
+        bottomBar = {
+            if (showBottomBar) {
+                BottomNavigationBar(navController)
             }
         }
-    }
-}
-
-@Composable
-fun PostItem(post: Post, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp),
-        onClick = onClick
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = post.title, style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = post.body, style = MaterialTheme.typography.bodySmall, maxLines = 2)
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = Screen.Splash.route,
+            modifier = Modifier.padding(innerPadding)
+        ) {
+            composable(Screen.Splash.route) { SplashScreen(navController, userViewModel) }
+            composable(Screen.Onboarding.route) { OnboardingScreen(navController) }
+            composable(Screen.Login.route) { LoginScreen(navController, userViewModel) }
+            composable(Screen.Register.route) { RegisterScreen(navController, userViewModel) }
+            composable(Screen.Home.route) { 
+                HomeScreen(navController, menuViewModel, recommendationViewModel, restaurantViewModel, cartViewModel, userViewModel) 
+            }
+            composable(Screen.Notifications.route) {
+                NotificationScreen(navController, notificationViewModel)
+            }
+            composable(Screen.RestaurantDetail.route) { backStackEntry ->
+                val restaurantId = backStackEntry.arguments?.getString("restaurantId") ?: ""
+                RestaurantDetailScreen(navController, restaurantId, cartViewModel, menuViewModel, restaurantViewModel)
+            }
+            composable(Screen.Cart.route) { CartScreen(navController, cartViewModel) }
+            composable(Screen.Checkout.route) { CheckoutScreen(navController, userViewModel) }
+            composable(Screen.OrderTracking.route) { backStackEntry ->
+                val orderId = backStackEntry.arguments?.getString("orderId") ?: ""
+                OrderTrackingScreen(navController, orderId, orderViewModel)
+            }
+            composable(Screen.OrdersHistory.route) { OrdersHistoryScreen(navController, orderViewModel) }
+            composable(Screen.Profile.route) { ProfileScreen(navController, userViewModel) }
+            composable(Screen.AIAssistant.route) { AIAssistantScreen(navController) }
+            composable(Screen.Search.route) { SearchScreen(navController) }
+            
+            // Roles
+            composable(Screen.RestaurantAdmin.route) { RestaurantAdminScreen(navController, menuViewModel, orderViewModel, userViewModel) }
+            composable(Screen.DriverApp.route) { DriverAppScreen(navController, orderViewModel) }
+            composable(Screen.RoleSelection.route) { RoleSelectionScreen(navController) }
         }
     }
 }

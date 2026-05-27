@@ -2,7 +2,7 @@ package com.foddy.app.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.foddy.app.domain.usecase.GetPostsUseCase
+import com.foddy.app.domain.usecase.post.GetPostsUseCase
 import com.foddy.app.presentation.state.MainUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow

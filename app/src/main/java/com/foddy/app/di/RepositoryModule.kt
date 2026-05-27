@@ -1,18 +1,7 @@
 package com.foddy.app.di
 
-import com.foddy.app.data.repository.CartRepositoryImpl
-import com.foddy.app.data.repository.MenuRepositoryImpl
-import com.foddy.app.data.repository.NotificationRepositoryImpl
-import com.foddy.app.data.repository.OrderRepositoryImpl
-import com.foddy.app.data.repository.PostRepositoryImpl
-import com.foddy.app.data.repository.RestaurantRepositoryImpl
 import com.foddy.app.data.repository.UserRepositoryImpl
-import com.foddy.app.domain.repository.CartRepository
-import com.foddy.app.domain.repository.MenuRepository
-import com.foddy.app.domain.repository.NotificationRepository
-import com.foddy.app.domain.repository.OrderRepository
-import com.foddy.app.domain.repository.PostRepository
-import com.foddy.app.domain.repository.RestaurantRepository
+import com.foddy.app.data.repository.OrderRepositoryImpl
 import com.foddy.app.domain.repository.UserRepository
 import dagger.Binds
 import dagger.Module
@@ -26,18 +15,6 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindNotificationRepository(
-        notificationRepositoryImpl: NotificationRepositoryImpl
-    ): NotificationRepository
-
-    @Binds
-    @Singleton
-    abstract fun bindPostRepository(
-        postRepositoryImpl: PostRepositoryImpl
-    ): PostRepository
-
-    @Binds
-    @Singleton
     abstract fun bindUserRepository(
         userRepositoryImpl: UserRepositoryImpl
     ): UserRepository
@@ -46,23 +23,41 @@ abstract class RepositoryModule {
     @Singleton
     abstract fun bindOrderRepository(
         orderRepositoryImpl: OrderRepositoryImpl
-    ): OrderRepository
+    ): com.foddy.app.domain.repository.OrderRepository
 
     @Binds
     @Singleton
-    abstract fun bindMenuRepository(
-        menuRepositoryImpl: MenuRepositoryImpl
-    ): MenuRepository
+    abstract fun bindNotificationRepository(
+        notificationRepositoryImpl: com.foddy.app.data.repository.NotificationRepositoryImpl
+    ): com.foddy.app.domain.repository.NotificationRepository
 
     @Binds
     @Singleton
     abstract fun bindCartRepository(
-        cartRepositoryImpl: CartRepositoryImpl
-    ): CartRepository
+        cartRepositoryImpl: com.foddy.app.data.repository.CartRepositoryImpl
+    ): com.foddy.app.domain.repository.CartRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindMenuRepository(
+        menuRepositoryImpl: com.foddy.app.data.repository.MenuRepositoryImpl
+    ): com.foddy.app.domain.repository.MenuRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindPostRepository(
+        postRepositoryImpl: com.foddy.app.data.repository.PostRepositoryImpl
+    ): com.foddy.app.domain.repository.PostRepository
 
     @Binds
     @Singleton
     abstract fun bindRestaurantRepository(
-        restaurantRepositoryImpl: RestaurantRepositoryImpl
-    ): RestaurantRepository
+        restaurantRepositoryImpl: com.foddy.app.data.repository.RestaurantRepositoryImpl
+    ): com.foddy.app.domain.repository.RestaurantRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAIRepository(
+        aiRepositoryImpl: com.foddy.app.data.repository.AIRepositoryImpl
+    ): com.foddy.app.domain.repository.AIRepository
 }

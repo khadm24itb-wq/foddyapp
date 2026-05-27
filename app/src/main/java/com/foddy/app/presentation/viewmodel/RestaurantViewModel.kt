@@ -1,43 +1,86 @@
 package com.foddy.app.presentation.viewmodel
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.foddy.app.domain.model.Restaurant
+import com.foddy.app.domain.usecase.restaurant.GetRestaurantsUseCase
+import com.foddy.app.domain.util.Resource
+import com.foddy.app.presentation.ui.state.UiState
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
-sealed interface RestaurantUiState {
-    object Loading : RestaurantUiState
-    data class Success(
-        val restaurants: List<Restaurant>,
-        val isLastPage: Boolean = false,
-        val isLoadingMore: Boolean = false
-    ) : RestaurantUiState
-    data class Error(val message: String) : RestaurantUiState
-}
+@Immutable
+data class RestaurantState(
+    val restaurants: List<Restaurant> = emptyList(),
+    val isLastPage: Boolean = false,
+    val isLoadingMore: Boolean = false,
+    val error: String? = null,
+    val isOffline: Boolean = false
+)
 
 @HiltViewModel
 class RestaurantViewModel @Inject constructor(
-    private val firestore: FirebaseFirestore
+    private val getRestaurantsUseCase: GetRestaurantsUseCase
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow<RestaurantUiState>(RestaurantUiState.Loading)
-    val uiState: StateFlow<RestaurantUiState> = _uiState
+    private val _uiState = MutableStateFlow<UiState<RestaurantState>>(UiState.Loading)
+    val uiState: StateFlow<UiState<RestaurantState>> = _uiState.asStateFlow()
 
-    // Keep internal state for pagination
     private var allRestaurants = mutableListOf<Restaurant>()
     private var lastVisible: DocumentSnapshot? = null
     private var isLastPage = false
     private var isCurrentlyLoading = false
 
     init {
-        loadMoreRestaurants()
+        observeRestaurantsWithCache()
+    }
+
+    private fun observeRestaurantsWithCache() {
+        viewModelScope.launch {
+            getRestaurantsUseCase.executeWithCache().collect { resource ->
+                when (resource) {
+                    is Resource.Loading -> {
+                        if (resource.data.isNullOrEmpty()) {
+                            _uiState.value = UiState.Loading
+                        } else {
+                            _uiState.value = UiState.Success(
+                                RestaurantState(
+                                    restaurants = resource.data,
+                                    isLoadingMore = true
+                                )
+                            )
+                        }
+                    }
+                    is Resource.Success -> {
+                        allRestaurants = resource.data?.toMutableList() ?: mutableListOf()
+                        _uiState.value = UiState.Success(
+                            RestaurantState(
+                                restaurants = allRestaurants,
+                                isLastPage = true // For cached full list, we might disable pagination or handle it differently
+                            )
+                        )
+                    }
+                    is Resource.Error -> {
+                        if (resource.data.isNullOrEmpty()) {
+                            _uiState.value = UiState.Error(resource.message ?: "Unknown Error")
+                        } else {
+                            _uiState.value = UiState.Success(
+                                RestaurantState(
+                                    restaurants = resource.data,
+                                    error = resource.message,
+                                    isOffline = true
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fun loadMoreRestaurants() {
@@ -46,47 +89,47 @@ class RestaurantViewModel @Inject constructor(
         viewModelScope.launch {
             isCurrentlyLoading = true
             
-            // Update UI to show loading more if we already have data
             val currentState = _uiState.value
-            if (currentState is RestaurantUiState.Success) {
-                _uiState.value = currentState.copy(isLoadingMore = true)
+            if (currentState is UiState.Success) {
+                _uiState.value = UiState.Success(currentState.data.copy(isLoadingMore = true))
             }
 
             try {
-                var query = firestore.collection("restaurants")
-                    .orderBy("rating", Query.Direction.DESCENDING)
-                    .limit(10)
-
-                if (lastVisible != null) {
-                    query = query.startAfter(lastVisible!!)
+                getRestaurantsUseCase(limit = 10, lastVisible = lastVisible).collect { result ->
+                    val newRestaurants = result.first
+                    val nextVisible = result.second
+                    
+                    if (newRestaurants.isEmpty()) {
+                        isLastPage = true
+                    } else {
+                        val currentIds = allRestaurants.map { it.id }.toSet()
+                        val filteredNew = newRestaurants.filter { it.id !in currentIds }
+                        allRestaurants.addAll(filteredNew)
+                        lastVisible = nextVisible
+                    }
+                    
+                    _uiState.value = UiState.Success(
+                        RestaurantState(
+                            restaurants = allRestaurants.toList(),
+                            isLastPage = isLastPage,
+                            isLoadingMore = false
+                        )
+                    )
+                    isCurrentlyLoading = false
                 }
-
-                val snapshot = query.get().await()
-                if (snapshot.isEmpty) {
-                    isLastPage = true
-                } else {
-                    val newRestaurants = snapshot.toObjects(Restaurant::class.java)
-                    allRestaurants.addAll(newRestaurants)
-                    lastVisible = snapshot.documents[snapshot.size() - 1]
-                }
-                
-                _uiState.value = RestaurantUiState.Success(
-                    restaurants = allRestaurants.toList(),
-                    isLastPage = isLastPage,
-                    isLoadingMore = false
-                )
             } catch (e: Exception) {
                 if (allRestaurants.isEmpty()) {
-                    _uiState.value = RestaurantUiState.Error(e.message ?: "Unknown Error")
+                    _uiState.value = UiState.Error(e.message ?: "Unknown Error")
                 } else {
-                    // If we have data, just stop the loading more indicator
-                    _uiState.value = RestaurantUiState.Success(
-                        restaurants = allRestaurants.toList(),
-                        isLastPage = isLastPage,
-                        isLoadingMore = false
+                    _uiState.value = UiState.Success(
+                        RestaurantState(
+                            restaurants = allRestaurants.toList(),
+                            isLastPage = isLastPage,
+                            isLoadingMore = false,
+                            error = e.message
+                        )
                     )
                 }
-            } finally {
                 isCurrentlyLoading = false
             }
         }
@@ -96,7 +139,15 @@ class RestaurantViewModel @Inject constructor(
         lastVisible = null
         isLastPage = false
         allRestaurants.clear()
-        _uiState.value = RestaurantUiState.Loading
+        _uiState.value = UiState.Loading
         loadMoreRestaurants()
+    }
+
+    suspend fun getRestaurantById(id: String): Restaurant? {
+        return try {
+            getRestaurantsUseCase.getById(id)
+        } catch (e: Exception) {
+            null
+        }
     }
 }
