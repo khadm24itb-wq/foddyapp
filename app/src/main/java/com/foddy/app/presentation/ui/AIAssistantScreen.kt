@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -152,7 +153,10 @@ fun AIAssistantScreen(
                             unfocusedBorderColor = Color.LightGray
                         ),
                         maxLines = 3,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Send,
+                            capitalization = KeyboardCapitalization.Sentences
+                        ),
                         keyboardActions = KeyboardActions(onSend = {
                             if (inputText.isNotBlank()) {
                                 viewModel.sendMessage(inputText)

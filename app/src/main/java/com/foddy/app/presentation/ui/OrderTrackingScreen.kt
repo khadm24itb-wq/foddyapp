@@ -9,8 +9,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Message
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,12 +31,13 @@ import com.foddy.app.presentation.components.map.OSMView
 import com.foddy.app.presentation.navigation.Screen
 import com.foddy.app.presentation.viewmodel.OrderViewModel
 import com.foddy.app.presentation.ui.theme.Primary
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import timber.log.Timber
 
 @Composable
 fun OrderStatusTimeline(currentStatus: String) {
-    val statuses = listOf("pending", "preparing", "delivering", "completed")
+    val statuses = listOf("PENDING", "CONFIRMED", "PREPARING", "DELIVERING", "COMPLETED")
     val currentStep = statuses.indexOf(currentStatus).coerceAtLeast(0)
 
     Row(
@@ -70,11 +72,11 @@ fun OrderStatusTimeline(currentStatus: String) {
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        val labels = listOf("Đã đặt", "Nhận đơn", "Đang giao", "Đến nơi")
+        val labels = listOf("Đã đặt", "Xác nhận", "Chế biến", "Giao hàng", "Đến nơi")
         labels.forEachIndexed { index, label ->
             Text(
                 text = label,
-                fontSize = 10.sp,
+                fontSize = 8.sp,
                 color = if (index <= currentStep) Color.Black else Color.Gray,
                 fontWeight = if (index <= currentStep) FontWeight.Bold else FontWeight.Normal
             )
@@ -87,7 +89,7 @@ fun OrderStatusTimeline(currentStatus: String) {
 fun OrderTrackingScreen(
     navController: NavController, 
     orderId: String,
-    orderViewModel: OrderViewModel
+    orderViewModel: OrderViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val currentOrder by orderViewModel.currentOrder.collectAsStateWithLifecycle()
@@ -110,7 +112,7 @@ fun OrderTrackingScreen(
 
     // Real-time location from Driver
     val driverLocation = remember(driverLocState, currentOrder) {
-        driverLocState?.let { Location(it.lat, it.lng) } 
+        driverLocState?.let { Location(it.lat, it.lng) }
             ?: currentOrder?.driverLocation 
             ?: Location(21.0285, 105.8542)
     }
@@ -120,20 +122,23 @@ fun OrderTrackingScreen(
     LaunchedEffect(currentOrder?.status) {
         Timber.d("Order status changed to: ${currentOrder?.status}")
         when(currentOrder?.status) {
-            "preparing" -> {
-                snackbarHostState.showSnackbar("Đơn hàng của bạn đã được nhà hàng xác nhận và đang chế biến!")
+            "CONFIRMED" -> {
+                snackbarHostState.showSnackbar("Đơn hàng của bạn đã được nhà hàng xác nhận!")
             }
-            "delivering" -> {
+            "PREPARING" -> {
+                snackbarHostState.showSnackbar("Nhà hàng đang chế biến món ăn cho bạn!")
+            }
+            "DELIVERING" -> {
                 snackbarHostState.showSnackbar("Tài xế đã lấy hàng và đang trên đường giao!")
             }
-            "completed" -> {
+            "COMPLETED" -> {
                 snackbarHostState.showSnackbar("Đơn hàng đã hoàn thành. Cảm ơn bạn!")
             }
         }
     }
 
     // Dialog khi hoàn thành đơn hàng
-    if (currentOrder?.status == "completed") {
+    if (currentOrder?.status == "COMPLETED") {
         AlertDialog(
             onDismissRequest = { /* Không cho tắt */ },
             title = { Text("Tuyệt vời! 🎉") },
@@ -161,8 +166,15 @@ fun OrderTrackingScreen(
             title = { Text("Chat với tài xế") },
             text = {
                 Column {
+                    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+                    LaunchedEffect(chatMessages.size) {
+                        if (chatMessages.isNotEmpty()) {
+                            listState.animateScrollToItem(chatMessages.size - 1)
+                        }
+                    }
+
                     Box(modifier = Modifier.height(250.dp).fillMaxWidth()) {
-                        LazyColumn(reverseLayout = false) {
+                        LazyColumn(state = listState) {
                             items(chatMessages) { message ->
                                 val isMe = message.senderId == (currentOrder?.userId ?: "")
                                 Column(
@@ -231,6 +243,13 @@ fun OrderTrackingScreen(
                     } }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
+                },
+                actions = {
+                    IconButton(onClick = { 
+                        orderViewModel.trackOrder(orderId)
+                    }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Làm mới")
+                    }
                 }
             )
         }
@@ -265,10 +284,11 @@ fun OrderTrackingScreen(
                         Column {
                             Text(text = "Trạng thái", fontSize = 12.sp, color = Color.Gray)
                             Text(text = when(currentOrder?.status) {
-                                "pending" -> "Đang chờ quán nhận..."
-                                "preparing" -> "Quán đang chuẩn bị"
-                                "delivering" -> "Đang giao hàng"
-                                "completed" -> "Đã hoàn thành"
+                                "PENDING" -> "Đang chờ quán nhận..."
+                                "CONFIRMED" -> "Quán đã nhận đơn"
+                                "PREPARING" -> "Quán đang chuẩn bị"
+                                "DELIVERING" -> "Đang giao hàng"
+                                "COMPLETED" -> "Đã hoàn thành"
                                 else -> "Đang xử lý"
                             }, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Primary)
                         }
@@ -306,7 +326,7 @@ fun OrderTrackingScreen(
                                 Icon(Icons.Default.Call, contentDescription = null, tint = Primary)
                             }
                             IconButton(onClick = { showChatDialog = true }) {
-                                Icon(Icons.AutoMirrored.Filled.Message, contentDescription = null, tint = Primary)
+                                Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null, tint = Primary)
                             }
                         }
                     }

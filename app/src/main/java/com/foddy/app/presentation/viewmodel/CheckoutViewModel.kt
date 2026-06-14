@@ -25,6 +25,8 @@ data class CheckoutUiState(
     val customerId: String = "",
     val customerName: String = "",
     val deliveryAddress: String = "",
+    val selectedLat: Double = 0.0,
+    val selectedLng: Double = 0.0,
     val paymentStatus: PaymentStatus = PaymentStatus.PENDING,
     val selectedPaymentMethod: PaymentMethod = PaymentMethod.CASH_ON_DELIVERY,
     val orderId: String = "",
@@ -45,7 +47,8 @@ class CheckoutViewModel @Inject constructor(
     private val getCurrentUserUseCase: GetCurrentUserUseCase,
     private val placeOrderUseCase: PlaceOrderUseCase,
     private val sendOrderStatusNotificationUseCase: SendOrderStatusNotificationUseCase,
-    private val clearCartUseCase: ClearCartUseCase
+    private val clearCartUseCase: ClearCartUseCase,
+    private val getAddressesUseCase: com.foddy.app.domain.usecase.address.GetAddressesUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CheckoutUiState())
@@ -79,8 +82,22 @@ class CheckoutViewModel @Inject constructor(
                     _uiState.update { state ->
                         state.copy(
                             customerId = it.id,
-                            customerName = it.name,
-                            deliveryAddress = it.address
+                            customerName = it.name
+                        )
+                    }
+                }
+            }
+        }
+        // Observe Default Address
+        viewModelScope.launch {
+            getAddressesUseCase().collectLatest { addresses ->
+                val defaultAddress = addresses.find { it.isDefault } ?: addresses.firstOrNull()
+                defaultAddress?.let { addr ->
+                    _uiState.update { 
+                        it.copy(
+                            deliveryAddress = addr.fullAddress,
+                            selectedLat = addr.lat,
+                            selectedLng = addr.lng
                         )
                     }
                 }
@@ -133,19 +150,26 @@ class CheckoutViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
             
             try {
+                // Lấy restaurantId từ món ăn đầu tiên, ưu tiên ID thực, nếu không có mới dùng mặc định
+                val firstItem = currentState.cartItems.firstOrNull()
+                val targetRestaurantId = firstItem?.foodItem?.restaurantId?.takeIf { it.isNotBlank() } ?: "res_001"
+                
                 val order = OrderRequest(
                     id = currentState.orderId,
                     userId = currentState.customerId,
-                    restaurantId = currentState.cartItems.firstOrNull()?.foodItem?.restaurantId ?: "rest_001",
-                    restaurantName = "Foddy Store",
+                    restaurantId = targetRestaurantId,
+                    restaurantName = "Đơn hàng từ hệ thống",
                     address = currentState.deliveryAddress,
+                    lat = currentState.selectedLat,
+                    lng = currentState.selectedLng,
                     totalPrice = currentState.totalPrice,
                     items = currentState.cartItems,
                     paymentMethod = when(currentState.selectedPaymentMethod) {
                         PaymentMethod.CASH_ON_DELIVERY -> "COD"
                         PaymentMethod.BANK_TRANSFER -> "VietQR"
                     },
-                    status = "pending"
+                    status = OrderStatus.PENDING.name,
+                    customerLocation = Location(currentState.selectedLat, currentState.selectedLng)
                 )
 
                 placeOrderUseCase(order)

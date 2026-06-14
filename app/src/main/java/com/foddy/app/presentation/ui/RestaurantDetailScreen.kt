@@ -23,9 +23,10 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.foddy.app.domain.model.FoodItem
 import com.foddy.app.domain.model.Restaurant
-import com.foddy.app.presentation.components.FoodleTopBar
+import com.foddy.app.presentation.components.FoddyTopBar
 import com.foddy.app.presentation.viewmodel.*
 import com.foddy.app.presentation.ui.theme.Primary
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 import com.foddy.app.presentation.ui.state.UiState
@@ -35,9 +36,9 @@ import com.foddy.app.presentation.ui.state.UiState
 fun RestaurantDetailScreen(
     navController: NavController,
     restaurantId: String?,
-    cartViewModel: CartViewModel,
-    menuViewModel: MenuViewModel,
-    restaurantViewModel: RestaurantViewModel
+    cartViewModel: CartViewModel = hiltViewModel(),
+    menuViewModel: MenuViewModel = hiltViewModel(),
+    restaurantViewModel: RestaurantViewModel = hiltViewModel()
 ) {
     var restaurant by remember { mutableStateOf<Restaurant?>(null) }
     val menuUiState by menuViewModel.uiState.collectAsStateWithLifecycle()
@@ -61,7 +62,7 @@ fun RestaurantDetailScreen(
 
     Scaffold(
         topBar = {
-            FoodleTopBar(
+            FoddyTopBar(
                 title = restaurant?.name ?: "Nhà hàng",
                 onBackClick = { navController.popBackStack() }
             )
@@ -266,7 +267,7 @@ fun FoodDetailItem(foodItem: FoodItem, onAddClick: () -> Unit) {
             
             Box(contentAlignment = Alignment.BottomEnd) {
                 AsyncImage(
-                    model = foodItem.image,
+                    model = foodItem.imageUrl,
                     contentDescription = foodItem.name,
                     modifier = Modifier
                         .size(100.dp)

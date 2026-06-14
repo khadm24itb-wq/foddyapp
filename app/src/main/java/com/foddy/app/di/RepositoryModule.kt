@@ -60,4 +60,28 @@ abstract class RepositoryModule {
     abstract fun bindAIRepository(
         aiRepositoryImpl: com.foddy.app.data.repository.AIRepositoryImpl
     ): com.foddy.app.domain.repository.AIRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindStorageRepository(
+        storageRepositoryImpl: com.foddy.app.data.repository.StorageRepositoryImpl
+    ): com.foddy.app.domain.repository.StorageRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAddressRepository(
+        addressRepositoryImpl: com.foddy.app.data.repository.AddressRepositoryImpl
+    ): com.foddy.app.domain.repository.AddressRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindFavoriteRepository(
+        favoriteRepositoryImpl: com.foddy.app.data.repository.FavoriteRepositoryImpl
+    ): com.foddy.app.domain.repository.FavoriteRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindReviewRepository(
+        reviewRepositoryImpl: com.foddy.app.data.repository.ReviewRepositoryImpl
+    ): com.foddy.app.domain.repository.ReviewRepository
 }

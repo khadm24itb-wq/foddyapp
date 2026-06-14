@@ -24,4 +24,12 @@ sealed class Screen(val route: String) {
     object DriverApp : Screen("driver_app")
     object RoleSelection : Screen("role_selection")
     object AIAssistant : Screen("ai_assistant")
+    
+    // User Features
+    object AddressManagement : Screen("address_management")
+    object Favorites : Screen("favorites")
+    object ProfileEdit : Screen("profile_edit")
+    object OrderReview : Screen("order_review/{orderId}") {
+        fun createRoute(orderId: String) = "order_review/$orderId"
+    }
 }

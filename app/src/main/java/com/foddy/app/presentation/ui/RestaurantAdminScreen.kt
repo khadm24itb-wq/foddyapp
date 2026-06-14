@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
@@ -21,6 +22,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -30,16 +36,20 @@ import com.foddy.app.domain.model.OrderRequest
 import com.foddy.app.presentation.viewmodel.AIViewModel
 import com.foddy.app.presentation.viewmodel.MenuViewModel
 import com.foddy.app.presentation.viewmodel.OrderViewModel
+import com.foddy.app.presentation.navigation.Screen
 import com.foddy.app.presentation.viewmodel.UserViewModel
 import com.foddy.app.presentation.ui.theme.Primary
+import com.foddy.app.core.Resource
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RestaurantAdminScreen(
-    navController: NavController, 
-    menuViewModel: MenuViewModel,
-    orderViewModel: OrderViewModel,
-    userViewModel: UserViewModel
+    navController: NavController,
+    menuViewModel: MenuViewModel = hiltViewModel(),
+    orderViewModel: OrderViewModel = hiltViewModel(),
+    userViewModel: UserViewModel = hiltViewModel()
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Đơn hàng", "Thực đơn", "Phân tích AI")
@@ -52,8 +62,22 @@ fun RestaurantAdminScreen(
                         Text("Quản lý Nhà hàng", fontWeight = FontWeight.ExtraBold) 
                     },
                     actions = {
-                        IconButton(onClick = { userViewModel.logout(); navController.navigate("login") { popUpTo(0) } }) {
-                            Icon(Icons.Default.Logout, contentDescription = null, tint = Color.Gray)
+                        IconButton(onClick = { 
+                            when (selectedTab) {
+                                0 -> orderViewModel.listenToRestaurantOrders(userViewModel.user.value.restaurantId ?: "res_001")
+                                1 -> menuViewModel.observeMenu(userViewModel.user.value.restaurantId ?: "res_001")
+                                2 -> orderViewModel.listenToRestaurantOrders(userViewModel.user.value.restaurantId ?: "res_001")
+                            }
+                        }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Làm mới", tint = Primary)
+                        }
+                        IconButton(onClick = { 
+                            userViewModel.logout()
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(0) { inclusive = true } 
+                            } 
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Đăng xuất", tint = Color.Gray)
                         }
                     }
                 )
@@ -238,37 +262,57 @@ fun AIInsightItem(icon: ImageVector, title: String, desc: String) {
 }
 
 @Composable
-fun OrderManagementSection(orderViewModel: OrderViewModel) {
+fun OrderManagementSection(orderViewModel: OrderViewModel, userViewModel: UserViewModel = hiltViewModel()) {
     val rawOrders by orderViewModel.restaurantOrders.collectAsStateWithLifecycle()
-    val restaurantId = "rest_001" // Demo ID
+    val userProfile by userViewModel.user.collectAsStateWithLifecycle()
+    val restaurantId = userProfile.restaurantId ?: "res_001"
 
-    // Tối ưu hóa: Chỉ sắp xếp lại khi rawOrders thay đổi
-    val sortedOrders by remember(rawOrders) {
-        derivedStateOf {
-            rawOrders.sortedByDescending { it.timestamps["placedAt"] ?: 0L }
+    LaunchedEffect(restaurantId) {
+        if (restaurantId.isNotBlank()) {
+            orderViewModel.listenToRestaurantOrders(restaurantId)
         }
     }
 
-    LaunchedEffect(Unit) {
-        orderViewModel.listenToRestaurantOrders(restaurantId)
-    }
-
-    if (sortedOrders.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Chưa có đơn hàng nào", color = Color.Gray)
-        }
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Debug Info - Giúp bạn biết ID đang hoạt động
+        Surface(
+            color = Color.DarkGray,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            items(
-                items = sortedOrders,
-                key = { it.id } // Thêm key để LazyColumn ổn định hơn
-            ) { order ->
-                RestaurantOrderCard(order) { newStatus ->
-                    orderViewModel.updateOrderStatus(order.id, newStatus)
+            Text(
+                text = "Đang quản lý ID: $restaurantId | Tổng: ${rawOrders.size} đơn",
+                color = Color.White,
+                fontSize = 10.sp,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+        }
+
+        if (rawOrders.isEmpty()) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Inbox, 
+                        contentDescription = null, 
+                        modifier = Modifier.size(48.dp), 
+                        tint = Color.LightGray
+                    )
+                    Text("Chưa có đơn hàng nào cho quán này", color = Color.Gray)
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                val sortedOrders = rawOrders.sortedByDescending { it.createdAt }
+                items(
+                    items = sortedOrders,
+                    key = { it.id }
+                ) { order ->
+                    RestaurantOrderCard(order) { newStatus ->
+                        orderViewModel.updateOrderStatus(order.id, newStatus)
+                    }
                 }
             }
         }
@@ -290,28 +334,31 @@ fun RestaurantOrderCard(order: OrderRequest, onStatusUpdate: (String) -> Unit) {
                 Text(text = "Đơn #${order.id.takeLast(6)}", fontWeight = FontWeight.Bold, color = Color.Gray)
                 Surface(
                     color = when(order.status) {
-                        "pending" -> Color(0xFFFFF3E0)
-                        "preparing" -> Color(0xFFE3F2FD)
-                        "delivering" -> Color(0xFFE8F5E9)
-                        "completed" -> Color(0xFFF5F5F5)
+                        "PENDING" -> Color(0xFFFFF3E0)
+                        "CONFIRMED" -> Color(0xFFE3F2FD)
+                        "PREPARING" -> Color(0xFFE3F2FD)
+                        "DELIVERING" -> Color(0xFFE8F5E9)
+                        "COMPLETED" -> Color(0xFFF5F5F5)
                         else -> Color(0xFFF5F5F5)
                     },
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
                         text = when(order.status) {
-                            "pending" -> "MỚI"
-                            "preparing" -> "ĐANG CHẾ BIẾN"
-                            "delivering" -> "ĐANG GIAO"
-                            "completed" -> "HOÀN THÀNH"
+                            "PENDING" -> "MỚI"
+                            "CONFIRMED" -> "ĐÃ XÁC NHẬN"
+                            "PREPARING" -> "ĐANG CHẾ BIẾN"
+                            "DELIVERING" -> "ĐANG GIAO"
+                            "COMPLETED" -> "HOÀN THÀNH"
                             else -> order.status.uppercase()
                         },
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         color = when(order.status) {
-                            "pending" -> Color(0xFFEF6C00)
-                            "preparing" -> Color(0xFF1976D2)
-                            "delivering" -> Color(0xFF2E7D32)
-                            "completed" -> Color.Gray
+                            "PENDING" -> Color(0xFFEF6C00)
+                            "CONFIRMED" -> Color(0xFF1976D2)
+                            "PREPARING" -> Color(0xFF1976D2)
+                            "DELIVERING" -> Color(0xFF2E7D32)
+                            "COMPLETED" -> Color.Gray
                             else -> Color.Gray
                         },
                         fontSize = 10.sp,
@@ -343,9 +390,9 @@ fun RestaurantOrderCard(order: OrderRequest, onStatusUpdate: (String) -> Unit) {
                     Text("${order.totalPrice.toInt()}đ", fontWeight = FontWeight.ExtraBold, color = Primary, fontSize = 18.sp)
                 }
                 
-                if (order.status == "pending") {
+                if (order.status == "PENDING") {
                     Button(
-                        onClick = { onStatusUpdate("preparing") },
+                        onClick = { onStatusUpdate("CONFIRMED") },
                         colors = ButtonDefaults.buttonColors(containerColor = Primary),
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 0.dp),
@@ -355,14 +402,23 @@ fun RestaurantOrderCard(order: OrderRequest, onStatusUpdate: (String) -> Unit) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Nhận đơn", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     }
-                } else if (order.status == "preparing") {
+                } else if (order.status == "CONFIRMED") {
+                    Button(
+                        onClick = { onStatusUpdate("PREPARING") },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.height(40.dp)
+                    ) {
+                        Text("Bắt đầu chế biến", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                } else if (order.status == "PREPARING") {
                     OutlinedButton(
                         onClick = { /* Wait for driver */ },
                         shape = RoundedCornerShape(8.dp),
                         enabled = false,
                         modifier = Modifier.height(40.dp)
                     ) {
-                        Text("Chờ tài xế...", fontSize = 14.sp)
+                        Text("Đang chờ tài xế...", fontSize = 14.sp)
                     }
                 }
             }
@@ -371,24 +427,133 @@ fun RestaurantOrderCard(order: OrderRequest, onStatusUpdate: (String) -> Unit) {
 }
 
 @Composable
-fun MenuManagementSection(menuViewModel: MenuViewModel) {
+fun MenuManagementSection(menuViewModel: MenuViewModel, userViewModel: UserViewModel = hiltViewModel()) {
     val menuItems by menuViewModel.foodItems.collectAsStateWithLifecycle()
+    val userProfile by userViewModel.user.collectAsStateWithLifecycle()
+    val restaurantId = userProfile.restaurantId ?: "res_001" 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    
+    val uploadState by menuViewModel.uploadState.collectAsStateWithLifecycle()
     var showAddDialog by remember { mutableStateOf(false) }
     
+    // Khởi chạy việc lắng nghe menu khi vào màn hình
+    LaunchedEffect(restaurantId) {
+        if (restaurantId.isNotEmpty()) {
+            menuViewModel.observeMenu(restaurantId)
+        }
+    }
+    var editingItem by remember { mutableStateOf<FoodItem?>(null) }
+    
     var name by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
+    var stock by remember { mutableStateOf("99") }
     var isFlashSale by remember { mutableStateOf(false) }
+    var isAvailable by remember { mutableStateOf(true) }
+    var selectedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
 
-    if (showAddDialog) {
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        selectedImageUri = uri
+    }
+
+    LaunchedEffect(uploadState) {
+        if (uploadState is Resource.Success && (uploadState.data ?: "").isNotEmpty()) {
+            val newImageUrl = uploadState.data ?: ""
+            if (editingItem != null) {
+                val updatedItem = editingItem!!.copy(
+                    name = name,
+                    description = description,
+                    price = price.toDoubleOrNull() ?: 0.0,
+                    stock = stock.toIntOrNull() ?: 99,
+                    discountPrice = if (isFlashSale) (price.toDoubleOrNull() ?: 0.0) * 0.8 else null,
+                    imageUrl = newImageUrl,
+                    isFlashSale = isFlashSale,
+                    available = isAvailable
+                )
+                menuViewModel.updateFoodItem(updatedItem, oldImageUrl = editingItem!!.imageUrl)
+            } else {
+                val newItem = FoodItem(
+                    id = java.util.UUID.randomUUID().toString(),
+                    name = name,
+                    description = description,
+                    price = price.toDoubleOrNull() ?: 0.0,
+                    stock = stock.toIntOrNull() ?: 99,
+                    discountPrice = if (isFlashSale) (price.toDoubleOrNull() ?: 0.0) * 0.8 else null,
+                    imageUrl = newImageUrl,
+                    restaurantId = restaurantId,
+                    rating = 5.0,
+                    calories = 300,
+                    isFlashSale = isFlashSale,
+                    available = isAvailable
+                )
+                menuViewModel.addFoodItem(newItem)
+            }
+            menuViewModel.resetUploadState()
+            showAddDialog = false
+            editingItem = null
+            name = ""; description = ""; price = ""; isFlashSale = false; isAvailable = true; selectedImageUri = null
+        }
+    }
+
+    if (showAddDialog || editingItem != null) {
         AlertDialog(
-            onDismissRequest = { showAddDialog = false },
-            title = { Text("Thêm món ăn mới", fontWeight = FontWeight.Bold) },
+            onDismissRequest = { 
+                showAddDialog = false
+                editingItem = null
+                name = ""; description = ""; price = ""; isFlashSale = false; isAvailable = true; selectedImageUri = null
+                menuViewModel.resetUploadState()
+            },
+            title = { Text(if (editingItem != null) "Sửa món ăn" else "Thêm món ăn mới", fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Image Picker
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.Gray.copy(alpha = 0.1f))
+                            .clickable { launcher.launch("image/*") },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (selectedImageUri != null) {
+                            AsyncImage(
+                                model = selectedImageUri,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else if (editingItem != null && editingItem!!.imageUrl.isNotEmpty()) {
+                            AsyncImage(
+                                model = editingItem!!.imageUrl,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, tint = Color.Gray)
+                                Text("Chọn ảnh món ăn", color = Color.Gray, fontSize = 12.sp)
+                            }
+                        }
+                    }
+
                     OutlinedTextField(
                         value = name, 
                         onValueChange = { name = it }, 
                         label = { Text("Tên món") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("Mô tả") },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
@@ -399,44 +564,111 @@ fun MenuManagementSection(menuViewModel: MenuViewModel) {
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
+                    OutlinedTextField(
+                        value = stock, 
+                        onValueChange = { stock = it }, 
+                        label = { Text("Số lượng trong kho") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    
                     Surface(
                         color = Color.Gray.copy(alpha = 0.05f),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(8.dp)
-                        ) {
-                            Checkbox(checked = isFlashSale, onCheckedChange = { isFlashSale = it })
-                            Text("Kích hoạt Flash Sale (Giảm 20%)", fontSize = 14.sp)
+                        Column {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            ) {
+                                Checkbox(checked = isFlashSale, onCheckedChange = { isFlashSale = it })
+                                Text("Kích hoạt Flash Sale (Giảm 20%)", fontSize = 14.sp)
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            ) {
+                                Checkbox(checked = isAvailable, onCheckedChange = { isAvailable = it })
+                                Text("Còn hàng (Availability)", fontSize = 14.sp)
+                            }
                         }
+                    }
+
+                    if (uploadState is Resource.Loading) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Primary)
+                        Text("Đang xử lý...", fontSize = 12.sp, color = Primary)
+                    }
+                    
+                    if (uploadState is Resource.Error) {
+                        Text(uploadState.message ?: "Lỗi tải ảnh", color = Color.Red, fontSize = 12.sp)
                     }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        val newItem = FoodItem(
-                            id = (menuItems.size + 1).toString(),
-                            name = name,
-                            description = "Món ăn mới thêm",
-                            price = price.toDoubleOrNull() ?: 0.0,
-                            discountPrice = if (isFlashSale) (price.toDoubleOrNull() ?: 0.0) * 0.8 else null,
-                            image = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500",
-                            rating = 5.0,
-                            calories = 300,
-                            isFlashSale = isFlashSale
-                        )
-                        menuViewModel.addFoodItem(newItem)
+                        var finalImageUrl = if (editingItem != null) editingItem!!.imageUrl else "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500"
+                        
+                        // Chuyển ảnh sang Base64 với nén tối ưu nếu người dùng chọn ảnh mới
+                        selectedImageUri?.let { uri ->
+                            val compressedBase64 = com.foddy.app.core.util.ImageUtils.compressImageToBase64(
+                                context = context,
+                                uri = uri,
+                                maxWidth = 600,
+                                maxHeight = 600,
+                                quality = 70
+                            )
+                            if (compressedBase64 != null) {
+                                finalImageUrl = compressedBase64
+                            }
+                        }
+
+                        if (editingItem != null) {
+                            val updatedItem = editingItem!!.copy(
+                                name = name,
+                                description = description,
+                                price = price.toDoubleOrNull() ?: 0.0,
+                                stock = stock.toIntOrNull() ?: 99,
+                                discountPrice = if (isFlashSale) (price.toDoubleOrNull() ?: 0.0) * 0.8 else null,
+                                imageUrl = finalImageUrl,
+                                isFlashSale = isFlashSale,
+                                available = isAvailable
+                            )
+                            menuViewModel.updateFoodItem(updatedItem)
+                        } else {
+                            val newItem = FoodItem(
+                                id = java.util.UUID.randomUUID().toString(),
+                                name = name,
+                                description = description,
+                                price = price.toDoubleOrNull() ?: 0.0,
+                                stock = stock.toIntOrNull() ?: 99,
+                                discountPrice = if (isFlashSale) (price.toDoubleOrNull() ?: 0.0) * 0.8 else null,
+                                imageUrl = finalImageUrl,
+                                restaurantId = restaurantId,
+                                rating = 5.0,
+                                calories = 300,
+                                isFlashSale = isFlashSale,
+                                available = isAvailable
+                            )
+                            menuViewModel.addFoodItem(newItem)
+                        }
+                        
                         showAddDialog = false
-                        name = ""; price = ""; isFlashSale = false
+                        editingItem = null
+                        name = ""; description = ""; price = ""; isFlashSale = false; isAvailable = true; selectedImageUri = null
                     },
+                    enabled = name.isNotBlank() && price.isNotBlank(),
                     shape = RoundedCornerShape(8.dp)
                 ) { Text("Lưu món") }
             },
             dismissButton = {
-                TextButton(onClick = { showAddDialog = false }) { Text("Hủy") }
+                TextButton(onClick = { 
+                    showAddDialog = false
+                    editingItem = null
+                    name = ""; description = ""; price = ""; isFlashSale = false; isAvailable = true; selectedImageUri = null
+                    menuViewModel.resetUploadState()
+                }) { Text("Hủy") }
             }
         )
     }
@@ -463,7 +695,22 @@ fun MenuManagementSection(menuViewModel: MenuViewModel) {
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(menuItems) { item ->
-                    AdminFoodCard(item) { menuViewModel.removeFoodItem(item) }
+                    AdminFoodCard(
+                        item = item, 
+                        onDelete = { menuViewModel.removeFoodItem(item) },
+                        onEdit = {
+                            editingItem = item
+                            name = item.name
+                            description = item.description
+                            price = item.price.toInt().toString()
+                            stock = item.stock.toString()
+                            isFlashSale = item.isFlashSale
+                            isAvailable = item.available
+                        },
+                        onToggleAvailability = {
+                            menuViewModel.updateFoodItem(item.copy(available = !item.available))
+                        }
+                    )
                 }
                 item { Spacer(modifier = Modifier.height(80.dp)) }
             }
@@ -498,9 +745,14 @@ fun AdminStatCard(modifier: Modifier, label: String, value: String, color: Color
 }
 
 @Composable
-fun AdminFoodCard(item: FoodItem, onDelete: () -> Unit) {
+fun AdminFoodCard(
+    item: FoodItem, 
+    onDelete: () -> Unit,
+    onEdit: () -> Unit,
+    onToggleAvailability: () -> Unit
+) {
     ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().alpha(if (item.available) 1f else 0.6f),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.elevatedCardColors(containerColor = Color.White),
         elevation = CardDefaults.elevatedCardElevation(2.dp)
@@ -510,7 +762,7 @@ fun AdminFoodCard(item: FoodItem, onDelete: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
-                model = item.image,
+                model = item.imageUrl,
                 contentDescription = null,
                 modifier = Modifier
                     .size(80.dp)
@@ -540,15 +792,42 @@ fun AdminFoodCard(item: FoodItem, onDelete: () -> Unit) {
                         }
                     }
                 }
+                if (!item.available) {
+                    Text("Hết hàng", color = Color.Red, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                } else {
+                    Text("Kho: ${item.stock}", color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
                 Text("Mô tả: ${item.description}", color = Color.Gray, fontSize = 12.sp, maxLines = 1)
             }
             
-            IconButton(
-                onClick = onDelete,
-                modifier = Modifier.clip(CircleShape).background(Color(0xFFFFEBEE))
-            ) { 
-                Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red, modifier = Modifier.size(20.dp)) 
+            Row {
+                Switch(
+                    checked = item.available, 
+                    onCheckedChange = { onToggleAvailability() },
+                    scale = 0.7f
+                )
+                IconButton(onClick = onEdit) {
+                    Icon(Icons.Default.Edit, contentDescription = null, tint = Color.Gray)
+                }
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.clip(CircleShape).background(Color(0xFFFFEBEE))
+                ) { 
+                    Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red, modifier = Modifier.size(20.dp)) 
+                }
             }
         }
+    }
+}
+
+// Helper to scale switch down
+@Composable
+fun Switch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    scale: Float
+) {
+    Box(modifier = Modifier.scale(scale)) {
+        androidx.compose.material3.Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }

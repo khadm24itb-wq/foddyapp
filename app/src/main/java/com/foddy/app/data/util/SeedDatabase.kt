@@ -3,6 +3,7 @@ package com.foddy.app.data.util
 import com.foddy.app.domain.model.FoodItem
 import com.foddy.app.domain.model.Restaurant
 import com.foddy.app.domain.model.User
+import com.foddy.app.domain.model.UserRole
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
@@ -88,7 +89,7 @@ class SeedDatabase @Inject constructor(
                         name = if (category == "Burgers") "Burger Special $i" else "$category Dish $i",
                         description = "Món ăn thơm ngon, bổ dưỡng với nguyên liệu tươi sạch mỗi ngày. Thưởng thức ngay hương vị đặc biệt từ $category.",
                         price = (20000..150000).random().toDouble(),
-                        image = "https://picsum.photos/seed/${i + 10}/400/300",
+                        imageUrl = "https://picsum.photos/seed/${i + 10}/400/300",
                         restaurantId = resId,
                         category = category,
                         isFlashSale = i % 5 == 0,
@@ -105,8 +106,8 @@ class SeedDatabase @Inject constructor(
             
             // Create sample drivers
             val drivers = listOf(
-                User(id = "driver_1", name = "Nguyễn Văn Tài", email = "driver1@test.com", role = "DRIVER", phone = "0912345678"),
-                User(id = "driver_2", name = "Trần Thị Xế", email = "driver2@test.com", role = "DRIVER", phone = "0987654321")
+                User(id = "driver_1", name = "Nguyễn Văn Tài", email = "driver1@test.com", role = UserRole.DRIVER.name, phone = "0912345678"),
+                User(id = "driver_2", name = "Trần Thị Xế", email = "driver2@test.com", role = UserRole.DRIVER.name, phone = "0987654321")
             )
             for (driver in drivers) {
                 firestore.collection("users").document(driver.id).set(driver).await()

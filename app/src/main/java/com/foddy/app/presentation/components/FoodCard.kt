@@ -31,7 +31,7 @@ fun FoodCard(
     ) {
         Column {
             AsyncImage(
-                model = foodItem.image,
+                model = foodItem.imageUrl,
                 contentDescription = foodItem.name,
                 modifier = Modifier
                     .fillMaxWidth()

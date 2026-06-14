@@ -21,7 +21,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.foddy.app.domain.model.PaymentMethod
-import com.foddy.app.presentation.components.FoodleTopBar
+import com.foddy.app.presentation.components.FoddyTopBar
 import com.foddy.app.presentation.navigation.Screen
 import com.foddy.app.presentation.ui.theme.Primary
 import com.foddy.app.presentation.viewmodel.CartViewModel
@@ -34,7 +34,7 @@ import kotlinx.coroutines.flow.collectLatest
 @Composable
 fun CheckoutScreen(
     navController: NavController,
-    userViewModel: UserViewModel,
+    userViewModel: UserViewModel = hiltViewModel(),
     checkoutViewModel: CheckoutViewModel = hiltViewModel()
 ) {
     val uiState by checkoutViewModel.uiState.collectAsStateWithLifecycle()
@@ -57,7 +57,7 @@ fun CheckoutScreen(
 
     Scaffold(
         topBar = {
-            FoodleTopBar(
+            FoddyTopBar(
                 title = "Thanh toán",
                 onBackClick = { navController.popBackStack() }
             )

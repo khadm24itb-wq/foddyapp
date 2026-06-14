@@ -1,7 +1,7 @@
 package com.foddy.app.domain.repository
 
 import com.foddy.app.domain.model.Restaurant
-import com.foddy.app.domain.util.Resource
+import com.foddy.app.core.Resource
 import com.google.firebase.firestore.DocumentSnapshot
 import kotlinx.coroutines.flow.Flow
 

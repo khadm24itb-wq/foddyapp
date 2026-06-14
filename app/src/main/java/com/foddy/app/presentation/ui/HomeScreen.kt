@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
@@ -45,7 +46,8 @@ fun HomeScreen(
     recommendationViewModel: RecommendationViewModel = hiltViewModel(),
     restaurantViewModel: RestaurantViewModel = hiltViewModel(),
     cartViewModel: CartViewModel = hiltViewModel(),
-    userViewModel: UserViewModel = hiltViewModel()
+    userViewModel: UserViewModel = hiltViewModel(),
+    notificationViewModel: NotificationViewModel = hiltViewModel()
 ) {
     val menuItems by menuViewModel.foodItems.collectAsStateWithLifecycle()
     val aiRecs by recommendationViewModel.aiRecs.collectAsStateWithLifecycle()
@@ -54,7 +56,6 @@ fun HomeScreen(
     val cartItems by cartViewModel.cartItems.collectAsStateWithLifecycle()
     val userState by userViewModel.uiState.collectAsStateWithLifecycle()
     
-    val notificationViewModel: NotificationViewModel = hiltViewModel()
     val unreadCount by notificationViewModel.unreadCount.collectAsStateWithLifecycle()
     
     LaunchedEffect(userState.user) {
@@ -65,7 +66,7 @@ fun HomeScreen(
     }
     
     val flashSaleItems = remember(menuItems) {
-        menuItems.filter { it.isFlashSale }
+        menuItems.filter { it.isFlashSale && it.available }
     }
     var selectedCategory by remember { mutableStateOf("Tất cả") }
     val categories = remember { DummyData.categories.map { it.name } }
@@ -73,10 +74,11 @@ fun HomeScreen(
     val filteredRestaurants = remember(restaurantUiState, selectedCategory) {
         if (restaurantUiState is UiState.Success) {
             val data = (restaurantUiState as UiState.Success).data
+            val list = data.restaurants
             if (selectedCategory == "Tất cả") {
-                data.restaurants
+                list
             } else {
-                data.restaurants.filter { it.category == selectedCategory }
+                list.filter { it.category == selectedCategory }
             }
         } else {
             emptyList()
@@ -89,7 +91,15 @@ fun HomeScreen(
                 cartCount = cartItems.size,
                 unreadNotifications = unreadCount,
                 onCartClick = { navController.navigate(Screen.Cart.route) },
-                onNotificationClick = { navController.navigate(Screen.Notifications.route) }
+                onNotificationClick = { navController.navigate(Screen.Notifications.route) },
+                onRefresh = {
+                    restaurantViewModel.refresh()
+                    menuViewModel.observeMenu()
+                    val preferences = userState.user?.let { 
+                        "Tên: ${it.name}, Địa chỉ: ${it.address}. Thích các món ăn đa dạng." 
+                    } ?: "Thích đồ ăn cay, gà rán và trà sữa"
+                    recommendationViewModel.fetchRecommendations(preferences)
+                }
             )
         }
     ) { innerPadding ->
@@ -259,7 +269,8 @@ fun HomeHeader(
     cartCount: Int,
     unreadNotifications: Int = 0,
     onCartClick: () -> Unit,
-    onNotificationClick: () -> Unit
+    onNotificationClick: () -> Unit,
+    onRefresh: () -> Unit
 ) {
     Surface(
         color = Color.White,
@@ -285,6 +296,13 @@ fun HomeHeader(
             }
             
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                IconButton(
+                    onClick = onRefresh,
+                    modifier = Modifier.background(Color(0xFFF5F5F5), CircleShape)
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Làm mới", tint = Primary)
+                }
+
                 BadgedBox(
                     badge = { if (cartCount > 0) Badge { Text("$cartCount") } }
                 ) {

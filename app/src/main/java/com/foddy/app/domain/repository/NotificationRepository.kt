@@ -32,11 +32,22 @@ interface NotificationRepository {
         amount: Double
     ): Result<Unit>
     
+    // Gửi thông báo tin nhắn chat
+    suspend fun sendChatNotification(
+        receiverId: String,
+        orderId: String,
+        senderName: String,
+        message: String
+    ): Result<Unit>
+
     // Lắng nghe thông báo
     fun observeNotifications(): Flow<List<Notification>>
     
     // Đánh dấu đã đọc
-    suspend fun markAsRead(notificationId: String)
+    suspend fun markAsRead(notificationId: String): Result<Unit>
+
+    // Xóa thông báo
+    suspend fun deleteNotification(notificationId: String): Result<Unit>
 }
 
 data class OrderInfo(
@@ -59,12 +70,13 @@ sealed class OrderEvent {
 }
 
 data class Notification(
-    val id: String,
-    val title: String,
-    val body: String,
-    val type: NotificationType,
+    val id: String = "",
+    val userId: String = "",
+    val title: String = "",
+    val body: String = "",
+    val type: NotificationType = NotificationType.GENERAL,
     val orderId: String? = null,
-    val timestamp: Long,
+    val timestamp: Long = System.currentTimeMillis(),
     val isRead: Boolean = false,
     val data: Map<String, String> = emptyMap()
 )
@@ -75,6 +87,7 @@ enum class NotificationType {
     PAYMENT_CONFIRMED,
     NEW_DELIVERY,
     DELIVERY_UPDATE,
+    CHAT_MESSAGE,
     REVIEW,
     PROMOTION,
     GENERAL

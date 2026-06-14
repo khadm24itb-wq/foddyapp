@@ -10,7 +10,7 @@ data class FoodItemEntity(
     val description: String,
     val price: Double,
     val discountPrice: Double?,
-    val image: String,
+    val imageUrl: String,
     val rating: Double,
     val calories: Int,
     val isFlashSale: Boolean,

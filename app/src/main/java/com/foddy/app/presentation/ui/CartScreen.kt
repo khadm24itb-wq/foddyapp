@@ -20,24 +20,28 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.foddy.app.domain.model.CartItem
-import com.foddy.app.presentation.components.FoodleTopBar
+import com.foddy.app.presentation.components.FoddyTopBar
 import com.foddy.app.presentation.navigation.Screen
 import com.foddy.app.presentation.viewmodel.CartViewModel
 import com.foddy.app.presentation.ui.theme.Primary
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CartScreen(navController: NavController, cartViewModel: CartViewModel) {
+fun CartScreen(
+    navController: NavController,
+    cartViewModel: CartViewModel = hiltViewModel()
+) {
     val items by cartViewModel.cartItems.collectAsStateWithLifecycle()
     val totalPrice by cartViewModel.totalPrice.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
-            FoodleTopBar(
+            FoddyTopBar(
                 title = "Giỏ hàng",
                 onBackClick = { navController.popBackStack() }
             )
@@ -138,7 +142,7 @@ fun CartItemRow(item: CartItem, onIncrease: () -> Unit, onDecrease: () -> Unit) 
         verticalAlignment = Alignment.CenterVertically
     ) {
         AsyncImage(
-            model = item.foodItem.image,
+            model = item.foodItem.imageUrl,
             contentDescription = item.foodItem.name,
             modifier = Modifier
                 .size(80.dp)

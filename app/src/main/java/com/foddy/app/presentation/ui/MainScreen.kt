@@ -4,15 +4,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navDeepLink
 import com.foddy.app.presentation.navigation.Screen
 import com.foddy.app.presentation.ui.components.BottomNavigationBar
-import com.foddy.app.presentation.viewmodel.*
 
 @Composable
 fun MainScreen() {
@@ -20,14 +18,6 @@ fun MainScreen() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     
-    val userViewModel: UserViewModel = hiltViewModel()
-    val menuViewModel: MenuViewModel = hiltViewModel()
-    val cartViewModel: CartViewModel = hiltViewModel()
-    val orderViewModel: OrderViewModel = hiltViewModel()
-    val restaurantViewModel: RestaurantViewModel = hiltViewModel()
-    val recommendationViewModel: RecommendationViewModel = hiltViewModel()
-    val notificationViewModel: NotificationViewModel = hiltViewModel()
-
     val showBottomBar = currentRoute in listOf(
         Screen.Home.route,
         Screen.OrdersHistory.route,
@@ -47,35 +37,45 @@ fun MainScreen() {
             startDestination = Screen.Splash.route,
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable(Screen.Splash.route) { SplashScreen(navController, userViewModel) }
+            composable(Screen.Splash.route) { SplashScreen(navController) }
             composable(Screen.Onboarding.route) { OnboardingScreen(navController) }
-            composable(Screen.Login.route) { LoginScreen(navController, userViewModel) }
-            composable(Screen.Register.route) { RegisterScreen(navController, userViewModel) }
-            composable(Screen.Home.route) { 
-                HomeScreen(navController, menuViewModel, recommendationViewModel, restaurantViewModel, cartViewModel, userViewModel) 
-            }
-            composable(Screen.Notifications.route) {
-                NotificationScreen(navController, notificationViewModel)
-            }
+            composable(Screen.Login.route) { LoginScreen(navController) }
+            composable(Screen.Register.route) { RegisterScreen(navController) }
+            composable(Screen.Home.route) { HomeScreen(navController) }
+            composable(Screen.Notifications.route) { NotificationScreen(navController) }
             composable(Screen.RestaurantDetail.route) { backStackEntry ->
                 val restaurantId = backStackEntry.arguments?.getString("restaurantId") ?: ""
-                RestaurantDetailScreen(navController, restaurantId, cartViewModel, menuViewModel, restaurantViewModel)
+                RestaurantDetailScreen(navController, restaurantId)
             }
-            composable(Screen.Cart.route) { CartScreen(navController, cartViewModel) }
-            composable(Screen.Checkout.route) { CheckoutScreen(navController, userViewModel) }
-            composable(Screen.OrderTracking.route) { backStackEntry ->
+            composable(Screen.Cart.route) { CartScreen(navController) }
+            composable(Screen.Checkout.route) { CheckoutScreen(navController) }
+            composable(
+                route = Screen.OrderTracking.route,
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = "foddy://order/{orderId}" }
+                )
+            ) { backStackEntry ->
                 val orderId = backStackEntry.arguments?.getString("orderId") ?: ""
-                OrderTrackingScreen(navController, orderId, orderViewModel)
+                OrderTrackingScreen(navController, orderId)
             }
-            composable(Screen.OrdersHistory.route) { OrdersHistoryScreen(navController, orderViewModel) }
-            composable(Screen.Profile.route) { ProfileScreen(navController, userViewModel) }
+            composable(Screen.OrdersHistory.route) { OrdersHistoryScreen(navController) }
+            composable(Screen.Profile.route) { ProfileScreen(navController) }
             composable(Screen.AIAssistant.route) { AIAssistantScreen(navController) }
             composable(Screen.Search.route) { SearchScreen(navController) }
             
             // Roles
-            composable(Screen.RestaurantAdmin.route) { RestaurantAdminScreen(navController, menuViewModel, orderViewModel, userViewModel) }
-            composable(Screen.DriverApp.route) { DriverAppScreen(navController, orderViewModel) }
+            composable(Screen.RestaurantAdmin.route) { RestaurantAdminScreen(navController) }
+            composable(Screen.DriverApp.route) { DriverAppScreen(navController) }
             composable(Screen.RoleSelection.route) { RoleSelectionScreen(navController) }
+
+            // User Features
+            composable(Screen.AddressManagement.route) { AddressManagementScreen(navController) }
+            composable(Screen.Favorites.route) { FavoritesScreen(navController) }
+            composable(Screen.ProfileEdit.route) { AddAddressScreen(navController) } // Tận dụng AddAddress hoặc tạo ProfileEditScreen riêng
+            composable(Screen.OrderReview.route) { backStackEntry ->
+                val orderId = backStackEntry.arguments?.getString("orderId") ?: ""
+                OrderReviewScreen(navController, orderId)
+            }
         }
     }
 }

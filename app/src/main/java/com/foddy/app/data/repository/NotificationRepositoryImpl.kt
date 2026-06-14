@@ -5,143 +5,169 @@ import com.foddy.app.domain.repository.NotificationRepository
 import com.foddy.app.domain.repository.NotificationType
 import com.foddy.app.domain.repository.OrderEvent
 import com.foddy.app.domain.repository.OrderInfo
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.messaging.FirebaseMessaging
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import com.google.firebase.firestore.Query
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import timber.log.Timber
 import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
 class NotificationRepositoryImpl @Inject constructor(
     private val firestore: FirebaseFirestore,
-    private val messaging: FirebaseMessaging
+    private val firebaseAuth: FirebaseAuth
 ) : NotificationRepository {
-    
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val _notifications = MutableStateFlow<List<Notification>>(emptyList())
-    
+
+    override fun observeNotifications(): Flow<List<Notification>> = callbackFlow {
+        val userId = firebaseAuth.currentUser?.uid ?: ""
+        if (userId.isEmpty()) {
+            trySend(emptyList())
+            return@callbackFlow
+        }
+
+        val listener = firestore.collection("notifications")
+            .whereEqualTo("userId", userId)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Timber.e(error, "Error listening to notifications")
+                    return@addSnapshotListener
+                }
+                val notifications = snapshot?.documents?.mapNotNull { doc ->
+                    doc.toObject(Notification::class.java)?.copy(id = doc.id)
+                } ?: emptyList()
+                trySend(notifications)
+            }
+        awaitClose { listener.remove() }
+    }
+
     override suspend fun sendNewOrderNotification(
         restaurantId: String,
         orderId: String,
         orderInfo: OrderInfo
-    ): Result<Unit> = runCatching {
-        firestore.collection("notifications")
-            .add(
-                hashMapOf(
-                    "restaurantId" to restaurantId,
-                    "orderId" to orderId,
-                    "title" to "🆕 Đơn hàng mới!",
-                    "body" to "${orderInfo.customerName} đặt ${orderInfo.items.joinToString(", ")} - ${orderInfo.totalPrice.formatVND()}",
-                    "type" to NotificationType.NEW_ORDER.name,
-                    "timestamp" to System.currentTimeMillis()
-                )
-            )
-            .await()
-        
-        addLocalNotification(
-            Notification(
-                id = orderId,
-                title = "🆕 Đơn hàng mới!",
-                body = "${orderInfo.customerName} đặt ${orderInfo.items.firstOrNull() ?: "món ăn"}...",
-                type = NotificationType.NEW_ORDER,
-                orderId = orderId,
-                timestamp = System.currentTimeMillis()
-            )
+    ): Result<Unit> = try {
+        val notification = Notification(
+            userId = restaurantId,
+            title = "Đơn hàng mới!",
+            body = "Bạn có đơn hàng mới từ ${orderInfo.customerName}",
+            type = NotificationType.NEW_ORDER,
+            orderId = orderId,
+            timestamp = System.currentTimeMillis()
         )
+        firestore.collection("notifications").add(notification).await()
+        Result.success(Unit)
+    } catch (e: Exception) {
+        Timber.e(e, "Error sending new order notification")
+        Result.failure(e)
     }
-    
-    override suspend fun sendPaymentConfirmedNotification(
-        restaurantId: String,
-        orderId: String,
-        amount: Double
-    ): Result<Unit> = runCatching {
-        firestore.collection("notifications")
-            .add(
-                hashMapOf(
-                    "restaurantId" to restaurantId,
-                    "orderId" to orderId,
-                    "title" to "💰 Đã thanh toán!",
-                    "body" to "Đơn #$orderId đã thanh toán ${amount.formatVND()}",
-                    "type" to NotificationType.PAYMENT_CONFIRMED.name,
-                    "timestamp" to System.currentTimeMillis()
-                )
-            )
-            .await()
-        
-        addLocalNotification(
-            Notification(
-                id = "pay_$orderId",
-                title = "💰 Đã thanh toán!",
-                body = "Đơn #$orderId đã thanh toán ${amount.formatVND()}",
-                type = NotificationType.PAYMENT_CONFIRMED,
-                orderId = orderId,
-                timestamp = System.currentTimeMillis()
-            )
-        )
-    }
-    
+
     override suspend fun sendNewDeliveryNotification(
         shipperId: String,
         orderId: String,
         orderInfo: OrderInfo
-    ): Result<Unit> = runCatching {
-        addLocalNotification(
-            Notification(
-                id = "del_$orderId",
-                title = "🚴 Đơn hàng mới cần giao!",
-                body = "Giao đến ${orderInfo.deliveryAddress}",
-                type = NotificationType.NEW_DELIVERY,
-                orderId = orderId,
-                timestamp = System.currentTimeMillis()
-            )
+    ): Result<Unit> = try {
+        val notification = Notification(
+            userId = shipperId,
+            title = "Chuyến hàng mới!",
+            body = "Giao đơn hàng đến ${orderInfo.deliveryAddress}",
+            type = NotificationType.NEW_DELIVERY,
+            orderId = orderId,
+            timestamp = System.currentTimeMillis()
         )
+        firestore.collection("notifications").add(notification).await()
+        Result.success(Unit)
+    } catch (e: Exception) {
+        Timber.e(e, "Error sending new delivery notification")
+        Result.failure(e)
     }
-    
+
     override suspend fun sendOrderStatusNotification(
         userId: String,
         orderId: String,
         event: OrderEvent
-    ): Result<Unit> = runCatching {
+    ): Result<Unit> = try {
         val (title, body) = when (event) {
-            is OrderEvent.OrderConfirmed -> "✅ Đơn hàng đã xác nhận" to "Quán đang chuẩn bị món cho bạn"
-            is OrderEvent.Preparing -> "👨‍🍳 Đang chuẩn bị" to "Đơn hàng đang được nấu"
-            is OrderEvent.ReadyForPickup -> "🍽️ Sẵn sàng!" to "Đơn hàng sẵn sàng, đang chờ Shipper"
-            is OrderEvent.Delivering -> "🚴 Đang giao" to "Shipper đang trên đường giao cho bạn"
-            is OrderEvent.Delivered -> "✅ Giao hàng thành công" to "Cảm ơn bạn đã đặt FoddyApp!"
-            is OrderEvent.Cancelled -> "❌ Đơn hàng đã hủy" to event.reason
+            is OrderEvent.OrderConfirmed -> "Đã xác nhận" to "Đơn hàng của bạn đã được xác nhận"
+            is OrderEvent.Preparing -> "Đang chuẩn bị" to "Nhà hàng đang chuẩn bị món ăn cho bạn"
+            is OrderEvent.ReadyForPickup -> "Sẵn sàng giao" to "Đơn hàng đã sẵn sàng để giao đi"
+            is OrderEvent.Delivering -> "Đang giao hàng" to "Tài xế đang trên đường giao hàng cho bạn"
+            is OrderEvent.Delivered -> "Đã giao hàng" to "Đơn hàng của bạn đã được giao thành công bởi ${event.shipperName}"
+            is OrderEvent.Cancelled -> "Đã hủy" to "Đơn hàng bị hủy: ${event.reason}"
         }
-        
-        addLocalNotification(
-            Notification(
-                id = "status_$orderId",
-                title = title,
-                body = body,
-                type = NotificationType.ORDER_STATUS,
-                orderId = orderId,
-                timestamp = System.currentTimeMillis()
-            )
+
+        val notification = Notification(
+            userId = userId,
+            title = title,
+            body = body,
+            type = NotificationType.ORDER_STATUS,
+            orderId = orderId,
+            timestamp = System.currentTimeMillis()
         )
+        firestore.collection("notifications").add(notification).await()
+        Result.success(Unit)
+    } catch (e: Exception) {
+        Timber.e(e, "Error sending order status notification")
+        Result.failure(e)
     }
-    
-    override fun observeNotifications(): Flow<List<Notification>> = _notifications.asStateFlow()
-    
-    override suspend fun markAsRead(notificationId: String) {
-        _notifications.value = _notifications.value.map {
-            if (it.id == notificationId) it.copy(isRead = true) else it
-        }
+
+    override suspend fun sendPaymentConfirmedNotification(
+        restaurantId: String,
+        orderId: String,
+        amount: Double
+    ): Result<Unit> = try {
+        val notification = Notification(
+            userId = restaurantId,
+            title = "Thanh toán thành công",
+            body = "Đơn hàng #$orderId đã được thanh toán: ${amount.toInt()}đ",
+            type = NotificationType.PAYMENT_CONFIRMED,
+            orderId = orderId,
+            timestamp = System.currentTimeMillis()
+        )
+        firestore.collection("notifications").add(notification).await()
+        Result.success(Unit)
+    } catch (e: Exception) {
+        Timber.e(e, "Error sending payment confirmed notification")
+        Result.failure(e)
     }
-    
-    private fun addLocalNotification(notification: Notification) {
-        _notifications.value = listOf(notification) + _notifications.value
+
+    override suspend fun sendChatNotification(
+        receiverId: String,
+        orderId: String,
+        senderName: String,
+        message: String
+    ): Result<Unit> = try {
+        val notification = Notification(
+            userId = receiverId,
+            title = "Tin nhắn mới từ $senderName",
+            body = message,
+            type = NotificationType.CHAT_MESSAGE,
+            orderId = orderId,
+            timestamp = System.currentTimeMillis(),
+            data = mapOf("orderId" to orderId)
+        )
+        firestore.collection("notifications").add(notification).await()
+        Result.success(Unit)
+    } catch (e: Exception) {
+        Timber.e(e, "Error sending chat notification")
+        Result.failure(e)
     }
-    
-    private fun Double.formatVND() =
-        java.text.NumberFormat.getNumberInstance(java.util.Locale("vi", "VN"))
-            .format(this) + " đ"
+
+    override suspend fun markAsRead(notificationId: String): Result<Unit> = try {
+        firestore.collection("notifications").document(notificationId)
+            .update("isRead", true).await()
+        Result.success(Unit)
+    } catch (e: Exception) {
+        Timber.e(e, "Error marking notification as read")
+        Result.failure(e)
+    }
+
+    override suspend fun deleteNotification(notificationId: String): Result<Unit> = try {
+        firestore.collection("notifications").document(notificationId).delete().await()
+        Result.success(Unit)
+    } catch (e: Exception) {
+        Timber.e(e, "Error deleting notification")
+        Result.failure(e)
+    }
 }

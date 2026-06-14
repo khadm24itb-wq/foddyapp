@@ -21,7 +21,7 @@ class CartRepositoryImpl @Inject constructor(
                         id = entity.foodId,
                         name = entity.name,
                         price = entity.price,
-                        image = entity.image,
+                        imageUrl = entity.imageUrl,
                         restaurantId = entity.restaurantId
                     ),
                     quantity = entity.quantity
@@ -40,7 +40,7 @@ class CartRepositoryImpl @Inject constructor(
                     foodId = foodItem.id,
                     name = foodItem.name,
                     price = foodItem.price,
-                    image = foodItem.image,
+                    imageUrl = foodItem.imageUrl,
                     quantity = 1,
                     restaurantId = foodItem.restaurantId
                 )

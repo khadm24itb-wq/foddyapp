@@ -45,4 +45,9 @@ object DatabaseModule {
     fun provideRestaurantDao(database: AppDatabase): com.foddy.app.data.local.RestaurantDao {
         return database.restaurantDao()
     }
+
+    @Provides
+    fun provideOrderDao(database: AppDatabase): com.foddy.app.data.local.OrderDao {
+        return database.orderDao()
+    }
 }

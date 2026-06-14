@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.foddy.app.domain.model.Restaurant
 import com.foddy.app.domain.usecase.restaurant.GetRestaurantsUseCase
-import com.foddy.app.domain.util.Resource
+import com.foddy.app.core.Resource
 import com.foddy.app.presentation.ui.state.UiState
 import com.google.firebase.firestore.DocumentSnapshot
 import dagger.hilt.android.lifecycle.HiltViewModel

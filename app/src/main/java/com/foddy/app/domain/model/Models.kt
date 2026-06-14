@@ -10,7 +10,7 @@ data class FoodItem(
     val name: String = "",
     val description: String = "",
     val price: Double = 0.0,
-    val image: String = "",
+    val imageUrl: String = "",
     val restaurantId: String = "",
     val category: String = "",
     val available: Boolean = true,
@@ -18,6 +18,7 @@ data class FoodItem(
     val rating: Double = 0.0,
     val isFlashSale: Boolean = false,
     val soldCount: Int = 0,
+    val stock: Int = 99, // Thêm trường số lượng trong kho
     val calories: Int = 0
 )
 

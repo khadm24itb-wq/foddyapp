@@ -6,7 +6,7 @@ import javax.inject.Inject
 class AcceptOrderUseCase @Inject constructor(
     private val repository: OrderRepository
 ) {
-    suspend operator fun invoke(orderId: String, driverId: String, driverName: String) {
-        repository.acceptOrder(orderId, driverId, driverName)
+    suspend operator fun invoke(orderId: String, driverId: String, driverName: String, status: String = "PREPARING") {
+        repository.acceptOrder(orderId, driverId, driverName, status)
     }
 }

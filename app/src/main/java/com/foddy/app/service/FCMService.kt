@@ -2,10 +2,15 @@ package com.foddy.app.service
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import com.foddy.app.MainActivity
 import com.foddy.app.R
+import com.foddy.app.domain.repository.UserRepository
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
@@ -13,9 +18,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import timber.log.Timber
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class FCMService : FirebaseMessagingService() {
+
+    @Inject
+    lateinit var userRepository: UserRepository
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -26,7 +36,7 @@ class FCMService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        // Lưu token lên Firestore
+        Timber.d("New FCM Token: $token")
         scope.launch {
             saveTokenToFirestore(token)
         }
@@ -34,12 +44,13 @@ class FCMService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
-        
+        Timber.d("From: ${message.from}")
+
         val title = message.notification?.title ?: message.data["title"] ?: "FoddyApp"
         val body = message.notification?.body ?: message.data["body"] ?: ""
-        val type = message.data["type"] ?: "general"
+        val orderId = message.data["orderId"]
         
-        showNotification(title, body, type)
+        showNotification(title, body, orderId)
     }
 
     private fun createNotificationChannel() {
@@ -59,20 +70,35 @@ class FCMService : FirebaseMessagingService() {
         }
     }
 
-    private fun showNotification(title: String, body: String, type: String) {
+    private fun showNotification(title: String, body: String, orderId: String? = null) {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
+            if (orderId != null) {
+                data = Uri.parse("foddy://order/$orderId")
+            }
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            this, System.currentTimeMillis().toInt(), intent,
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info) // Fallback icon
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(body)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
         
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(System.currentTimeMillis().toInt(), notificationBuilder.build())
     }
 
-    private fun saveTokenToFirestore(token: String) {
-        // TODO: Lưu token vào Firestore theo user ID
+    private suspend fun saveTokenToFirestore(token: String) {
+        userRepository.updateFcmToken(token)
+            .onSuccess { Timber.d("FCM token updated successfully") }
+            .onFailure { Timber.e(it, "Failed to update FCM token") }
     }
 
     companion object {

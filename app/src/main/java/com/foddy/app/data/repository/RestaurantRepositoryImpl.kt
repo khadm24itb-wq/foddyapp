@@ -6,7 +6,7 @@ import com.foddy.app.data.mapper.toEntity
 import com.foddy.app.data.util.networkBoundResource
 import com.foddy.app.domain.model.Restaurant
 import com.foddy.app.domain.repository.RestaurantRepository
-import com.foddy.app.domain.util.Resource
+import com.foddy.app.core.Resource
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query

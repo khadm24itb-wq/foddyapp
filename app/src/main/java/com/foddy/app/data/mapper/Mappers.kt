@@ -6,6 +6,7 @@ import com.foddy.app.data.model.UserEntity
 import com.foddy.app.domain.model.FoodItem
 import com.foddy.app.domain.model.Restaurant
 import com.foddy.app.domain.model.User
+import com.foddy.app.domain.model.UserRole
 
 fun FoodItem.toEntity(): FoodItemEntity {
     return FoodItemEntity(
@@ -14,7 +15,7 @@ fun FoodItem.toEntity(): FoodItemEntity {
         description = description,
         price = price,
         discountPrice = discountPrice,
-        image = image,
+        imageUrl = imageUrl,
         rating = rating,
         calories = calories,
         isFlashSale = isFlashSale,
@@ -32,7 +33,7 @@ fun FoodItemEntity.toDomain(): FoodItem {
         description = description,
         price = price,
         discountPrice = discountPrice,
-        image = image,
+        imageUrl = imageUrl,
         rating = rating,
         calories = calories,
         isFlashSale = isFlashSale,

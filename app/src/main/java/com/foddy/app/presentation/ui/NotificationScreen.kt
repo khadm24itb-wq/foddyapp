@@ -9,7 +9,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,12 +22,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.foddy.app.domain.repository.Notification
 import com.foddy.app.domain.repository.NotificationType
 import com.foddy.app.presentation.navigation.Screen
 import com.foddy.app.presentation.viewmodel.NotificationViewModel
+import com.foddy.app.presentation.viewmodel.UserViewModel
 import com.foddy.app.presentation.ui.theme.Primary
 import java.text.SimpleDateFormat
 import java.util.*
@@ -34,9 +38,11 @@ import java.util.*
 @Composable
 fun NotificationScreen(
     navController: NavController,
-    viewModel: NotificationViewModel
+    viewModel: NotificationViewModel = hiltViewModel(),
+    userViewModel: UserViewModel = hiltViewModel()
 ) {
     val notifications by viewModel.notifications.collectAsStateWithLifecycle()
+    val user by userViewModel.user.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -78,7 +84,12 @@ fun NotificationScreen(
                         onClick = {
                             viewModel.markAsRead(notification.id)
                             if (notification.orderId != null) {
-                                navController.navigate(Screen.OrderTracking.createRoute(notification.orderId))
+                                val route = when (user.userRole) {
+                                    com.foddy.app.domain.model.UserRole.DRIVER -> Screen.DriverApp.route
+                                    com.foddy.app.domain.model.UserRole.RESTAURANT_OWNER -> Screen.RestaurantAdmin.route
+                                    else -> Screen.OrderTracking.createRoute(notification.orderId)
+                                }
+                                navController.navigate(route)
                             }
                         }
                     )
@@ -98,7 +109,14 @@ fun NotificationItem(
         NotificationType.NEW_ORDER -> Color(0xFF4CAF50)
         NotificationType.ORDER_STATUS -> Primary
         NotificationType.PAYMENT_CONFIRMED -> Color(0xFFFF9800)
+        NotificationType.CHAT_MESSAGE -> Color(0xFF2196F3)
         else -> Color.Gray
+    }
+
+    val icon = when (notification.type) {
+        NotificationType.CHAT_MESSAGE -> Icons.AutoMirrored.Filled.Chat
+        NotificationType.NEW_ORDER -> Icons.Default.ShoppingCart
+        else -> Icons.Default.Notifications
     }
 
     Card(
@@ -121,7 +139,7 @@ fun NotificationItem(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    Icons.Default.Notifications,
+                    icon,
                     contentDescription = null,
                     tint = iconColor,
                     modifier = Modifier.size(24.dp)

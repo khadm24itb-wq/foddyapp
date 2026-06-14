@@ -123,7 +123,7 @@ fun SearchScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(searchResults) { item ->
+                items(searchResults.filter { it.available }) { item ->
                     FoodCard(item) {
                         navController.navigate(Screen.RestaurantDetail.createRoute(item.restaurantId))
                     }

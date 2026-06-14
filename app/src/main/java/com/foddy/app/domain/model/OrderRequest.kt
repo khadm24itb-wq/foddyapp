@@ -10,7 +10,7 @@ data class OrderRequest(
     val restaurantName: String = "",
     val driverId: String? = null,
     val driverName: String? = null,
-    val status: String = "pending", // pending, accepted, preparing, delivering, completed, cancelled
+    val status: String = "PENDING",
     val totalPrice: Double = 0.0,
     val shippingFee: Double = 0.0,
     val paymentMethod: String = "CASH",

@@ -2,7 +2,7 @@ package com.foddy.app.domain.usecase.restaurant
 
 import com.foddy.app.domain.model.Restaurant
 import com.foddy.app.domain.repository.RestaurantRepository
-import com.foddy.app.domain.util.Resource
+import com.foddy.app.core.Resource
 import com.google.firebase.firestore.DocumentSnapshot
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject

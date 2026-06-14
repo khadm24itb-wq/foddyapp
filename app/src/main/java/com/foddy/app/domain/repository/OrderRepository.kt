@@ -14,7 +14,7 @@ interface OrderRepository {
     fun getChatMessages(orderId: String): Flow<List<OrderChatMessage>>
     suspend fun placeOrder(order: OrderRequest): Result<String>
     suspend fun updateOrderStatus(orderId: String, status: String): Result<Unit>
-    suspend fun acceptOrder(orderId: String, driverId: String, driverName: String): Result<Unit>
+    suspend fun acceptOrder(orderId: String, driverId: String, driverName: String, status: String): Result<Unit>
     suspend fun updateDriverLocation(orderId: String, lat: Double, lng: Double): Result<Unit>
     suspend fun sendChatMessage(message: OrderChatMessage): Result<Unit>
 }

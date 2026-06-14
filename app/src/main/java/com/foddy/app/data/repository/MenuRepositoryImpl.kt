@@ -5,8 +5,9 @@ import com.foddy.app.data.mapper.toDomain
 import com.foddy.app.data.mapper.toEntity
 import com.foddy.app.data.util.networkBoundResource
 import com.foddy.app.domain.model.FoodItem
+import com.foddy.app.domain.model.Category
 import com.foddy.app.domain.repository.MenuRepository
-import com.foddy.app.domain.util.Resource
+import com.foddy.app.core.Resource
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,9 +44,9 @@ class MenuRepositoryImpl @Inject constructor(
         }
 
         val collection = if (restaurantId != null) {
-            db.collection("menu").whereEqualTo("restaurantId", restaurantId)
+            db.collection("foods").whereEqualTo("restaurantId", restaurantId)
         } else {
-            db.collection("menu")
+            db.collection("foods")
         }
 
         val listener = collection.addSnapshotListener { snapshot, e ->
@@ -55,7 +56,10 @@ class MenuRepositoryImpl @Inject constructor(
             }
             if (snapshot != null) {
                 val items = snapshot.documents.mapNotNull { doc ->
-                    doc.toObject(FoodItem::class.java)?.copy(id = doc.id)
+                    val item = doc.toObject(FoodItem::class.java)
+                    // Map "imageUrl" from Firestore if it exists, or use "image" if older data
+                    val imageUrl = doc.getString("imageUrl") ?: doc.getString("image") ?: ""
+                    item?.copy(id = doc.id, imageUrl = imageUrl)
                 }
                 
                 // Cập nhật local database (chỉ nếu lấy toàn bộ hoặc có logic sync phù hợp)
@@ -74,11 +78,15 @@ class MenuRepositoryImpl @Inject constructor(
 
     override suspend fun addMenuItem(item: FoodItem) {
         val itemData = item.copy(id = "")
-        db.collection("menu").add(itemData).await()
+        db.collection("foods").add(itemData).await()
+    }
+
+    override suspend fun updateMenuItem(item: FoodItem) {
+        db.collection("foods").document(item.id).set(item).await()
     }
 
     override suspend fun removeMenuItem(item: FoodItem) {
-        db.collection("menu").document(item.id).delete().await()
+        db.collection("foods").document(item.id).delete().await()
     }
 
     override fun getMenuItemsWithCache(restaurantId: String?): Flow<Resource<List<FoodItem>>> = networkBoundResource(
@@ -91,12 +99,14 @@ class MenuRepositoryImpl @Inject constructor(
         },
         fetch = {
             val query = if (restaurantId != null) {
-                db.collection("menu").whereEqualTo("restaurantId", restaurantId)
+                db.collection("foods").whereEqualTo("restaurantId", restaurantId)
             } else {
-                db.collection("menu")
+                db.collection("foods")
             }
             query.get().await().documents.mapNotNull { doc ->
-                doc.toObject(FoodItem::class.java)?.copy(id = doc.id)
+                val item = doc.toObject(FoodItem::class.java)
+                val imageUrl = doc.getString("imageUrl") ?: doc.getString("image") ?: ""
+                item?.copy(id = doc.id, imageUrl = imageUrl)
             }
         },
         saveFetchResult = { items ->
@@ -106,4 +116,32 @@ class MenuRepositoryImpl @Inject constructor(
             foodItemDao.insertAll(items.map { it.toEntity() })
         }
     )
+
+    override fun getCategories(): Flow<List<Category>> = callbackFlow {
+        val listener = db.collection("categories").addSnapshotListener { snapshot, e ->
+            if (e != null) {
+                close(e)
+                return@addSnapshotListener
+            }
+            if (snapshot != null) {
+                val categories = snapshot.documents.mapNotNull { doc ->
+                    doc.toObject(Category::class.java)?.copy(id = doc.id)
+                }
+                trySend(categories)
+            }
+        }
+        awaitClose { listener.remove() }
+    }
+
+    override suspend fun addCategory(category: Category) {
+        db.collection("categories").add(category).await()
+    }
+
+    override suspend fun updateCategory(category: Category) {
+        db.collection("categories").document(category.id).set(category).await()
+    }
+
+    override suspend fun deleteCategory(categoryId: String) {
+        db.collection("categories").document(categoryId).delete().await()
+    }
 }

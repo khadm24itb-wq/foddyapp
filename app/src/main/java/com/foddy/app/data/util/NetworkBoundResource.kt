@@ -1,6 +1,6 @@
 package com.foddy.app.data.util
 
-import com.foddy.app.domain.util.Resource
+import com.foddy.app.core.Resource
 import kotlinx.coroutines.flow.*
 
 inline fun <ResultType, RequestType> networkBoundResource(

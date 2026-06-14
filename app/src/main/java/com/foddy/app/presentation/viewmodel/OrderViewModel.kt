@@ -8,21 +8,25 @@ import com.foddy.app.domain.model.OrderChatMessage
 import com.foddy.app.domain.repository.OrderRepository
 import com.foddy.app.core.location.DriverLocationManager
 import android.location.Location
+import com.foddy.app.presentation.ui.state.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class OrderViewModel @Inject constructor(
     private val orderRepository: OrderRepository,
     private val locationManager: DriverLocationManager
 ) : ViewModel() {
 
-    private val _userOrders = MutableStateFlow<List<OrderRequest>>(emptyList())
-    val userOrders: StateFlow<List<OrderRequest>> = _userOrders.asStateFlow()
+    private val _orderState = MutableStateFlow<UiState<String>>(UiState.Idle)
+    val orderState: StateFlow<UiState<String>> = _orderState.asStateFlow()
+
+    private val _userOrders = MutableStateFlow<UiState<List<OrderRequest>>>(UiState.Idle)
+    val userOrders: StateFlow<UiState<List<OrderRequest>>> = _userOrders.asStateFlow()
 
     private val _restaurantOrders = MutableStateFlow<List<OrderRequest>>(emptyList())
     val restaurantOrders: StateFlow<List<OrderRequest>> = _restaurantOrders.asStateFlow()
@@ -30,27 +34,42 @@ class OrderViewModel @Inject constructor(
     private val _pendingOrders = MutableStateFlow<List<OrderRequest>>(emptyList())
     val pendingOrders: StateFlow<List<OrderRequest>> = _pendingOrders.asStateFlow()
 
-    private val _currentOrder = MutableStateFlow<OrderRequest?>(null)
-    val currentOrder: StateFlow<OrderRequest?> = _currentOrder.asStateFlow()
+    private val _orderIdFlow = MutableStateFlow<String?>(null)
 
-    private val _driverLocation = MutableStateFlow<DriverLocation?>(null)
-    val driverLocation: StateFlow<DriverLocation?> = _driverLocation.asStateFlow()
+    val currentOrder: StateFlow<OrderRequest?> = _orderIdFlow
+        .filterNotNull()
+        .flatMapLatest { id -> orderRepository.getOrderById(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    private val _chatMessages = MutableStateFlow<List<OrderChatMessage>>(emptyList())
-    val chatMessages: StateFlow<List<OrderChatMessage>> = _chatMessages.asStateFlow()
+    val chatMessages: StateFlow<List<OrderChatMessage>> = _orderIdFlow
+        .filterNotNull()
+        .flatMapLatest { id -> orderRepository.getChatMessages(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun placeOrder(order: OrderRequest, onComplete: (Result<String>) -> Unit) {
-        viewModelScope.launch {
-            val result = orderRepository.placeOrder(order)
-            onComplete(result)
+    val driverLocation: StateFlow<DriverLocation?> = currentOrder
+        .flatMapLatest { order ->
+            if (order != null && order.status != "PENDING") {
+                orderRepository.trackDriverLocation(order.id)
+            } else {
+                flowOf(null)
+            }
         }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    fun trackOrder(orderId: String) {
+        _orderIdFlow.value = orderId
     }
 
     fun listenToUserOrders(userId: String) {
         viewModelScope.launch {
-            orderRepository.getOrdersByUser(userId).collect {
-                _userOrders.value = it
-            }
+            _userOrders.value = UiState.Loading
+            orderRepository.getOrdersByUser(userId)
+                .catch { e ->
+                    _userOrders.value = UiState.Error(e.message ?: "Unknown error")
+                }
+                .collect {
+                    _userOrders.value = UiState.Success(it)
+                }
         }
     }
 
@@ -70,30 +89,6 @@ class OrderViewModel @Inject constructor(
         }
     }
 
-    fun trackOrder(orderId: String) {
-        viewModelScope.launch {
-            orderRepository.getOrderById(orderId).collect { order ->
-                _currentOrder.value = order
-                if (order?.status != "PENDING" && order?.id != null) {
-                    trackDriverLocation(order.id)
-                }
-            }
-        }
-        viewModelScope.launch {
-            orderRepository.getChatMessages(orderId).collect {
-                _chatMessages.value = it
-            }
-        }
-    }
-
-    private fun trackDriverLocation(orderId: String) {
-        viewModelScope.launch {
-            orderRepository.trackDriverLocation(orderId).collect {
-                _driverLocation.value = it
-            }
-        }
-    }
-
     fun updateOrderStatus(orderId: String, status: String) {
         viewModelScope.launch {
             orderRepository.updateOrderStatus(orderId, status)
@@ -102,7 +97,7 @@ class OrderViewModel @Inject constructor(
 
     fun acceptOrder(orderId: String, driverId: String, driverName: String) {
         viewModelScope.launch {
-            orderRepository.acceptOrder(orderId, driverId, driverName)
+            orderRepository.acceptOrder(orderId, driverId, driverName, "PREPARING")
         }
     }
 

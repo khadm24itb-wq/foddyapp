@@ -11,5 +11,5 @@ data class UserEntity(
     val phoneNumber: String = "",
     val address: String = "",
     val profilePictureUrl: String = "",
-    val role: String = "USER"
+    val role: String = "CUSTOMER"
 )

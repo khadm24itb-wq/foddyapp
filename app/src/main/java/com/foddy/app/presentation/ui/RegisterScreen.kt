@@ -23,18 +23,27 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.foddy.app.presentation.navigation.Screen
 import com.foddy.app.presentation.viewmodel.UserViewModel
 import com.foddy.app.presentation.ui.theme.Primary
 
+import com.foddy.app.domain.model.UserRole
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RegisterScreen(navController: NavController, userViewModel: UserViewModel) {
+fun RegisterScreen(
+    navController: NavController,
+    userViewModel: UserViewModel = hiltViewModel()
+) {
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var selectedRole by remember { mutableStateOf(UserRole.CUSTOMER) }
+    
     val context = LocalContext.current
     val uiState by userViewModel.uiState.collectAsStateWithLifecycle()
 
@@ -55,9 +64,42 @@ fun RegisterScreen(navController: NavController, userViewModel: UserViewModel) {
                 color = Color.Black
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Bắt đầu trải nghiệm Foodle ngay hôm nay", color = Color.Gray)
+            Text(text = "Bắt đầu trải nghiệm Foddy ngay hôm nay", color = Color.Gray)
             
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Role Selection
+            Text(
+                text = "Bạn đăng ký với vai trò:",
+                modifier = Modifier.fillMaxWidth(),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val roles = listOf(
+                    UserRole.CUSTOMER to "Khách hàng",
+                    UserRole.DRIVER to "Tài xế",
+                    UserRole.RESTAURANT_OWNER to "Nhà hàng"
+                )
+                
+                roles.forEach { (role, label) ->
+                    FilterChip(
+                        selected = selectedRole == role,
+                        onClick = { selectedRole = role },
+                        label = { Text(label) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Primary.copy(alpha = 0.1f),
+                            selectedLabelColor = Primary
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedTextField(
                 value = name,
@@ -109,14 +151,20 @@ fun RegisterScreen(navController: NavController, userViewModel: UserViewModel) {
                 Button(
                     onClick = {
                         if (name.isNotEmpty() && email.isNotEmpty() && password.isNotEmpty()) {
-                            userViewModel.register(name, email, password) { isSuccess ->
+                            userViewModel.register(name, email, password, selectedRole.name) { isSuccess ->
                                 if (isSuccess) {
                                     Toast.makeText(context, "Đăng ký thành công", Toast.LENGTH_SHORT).show()
-                                    navController.navigate(Screen.Home.route) {
+                                    // Sau khi đăng ký, điều hướng dựa trên role
+                                    val route = when (selectedRole) {
+                                        UserRole.DRIVER -> Screen.DriverApp.route
+                                        UserRole.RESTAURANT_OWNER -> Screen.RestaurantAdmin.route
+                                        else -> Screen.Home.route
+                                    }
+                                    navController.navigate(route) {
                                         popUpTo(Screen.Register.route) { inclusive = true }
                                     }
                                 } else {
-                                    Toast.makeText(context, "Đăng ký thất bại", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Đăng ký thất bại: ${uiState.error ?: "Lỗi không xác định"}", Toast.LENGTH_SHORT).show()
                                 }
                             }
                         } else {

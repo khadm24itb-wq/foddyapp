@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -15,42 +17,76 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foddy.app.domain.model.OrderRequest
+import com.foddy.app.presentation.ui.state.UiState
 import com.foddy.app.presentation.viewmodel.OrderViewModel
 import com.foddy.app.presentation.ui.theme.LightGray
 import com.foddy.app.presentation.ui.theme.Primary
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OrdersHistoryScreen(navController: NavController, orderViewModel: OrderViewModel) {
-    val orders by orderViewModel.userOrders.collectAsStateWithLifecycle()
+fun OrdersHistoryScreen(navController: NavController, orderViewModel: OrderViewModel = hiltViewModel()) {
+    val ordersState by orderViewModel.userOrders.collectAsStateWithLifecycle()
 
+    val userId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "eEhBaQc6OtQHltzRIp1KmJUnGPn1"
     LaunchedEffect(Unit) {
-        // Assume we have a way to get current user ID, for now using demo
-        orderViewModel.listenToUserOrders("user_001")
+        orderViewModel.listenToUserOrders(userId)
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Lịch sử đơn hàng") })
+            TopAppBar(
+                title = { Text("Lịch sử đơn hàng") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Quay lại")
+                    }
+                }
+            )
         }
     ) { padding ->
-        if (orders.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(text = "Bạn chưa có đơn hàng nào", color = Color.Gray)
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                items(orders) { order ->
-                    OrderHistoryCard(order)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            when (val state = ordersState) {
+                is UiState.Loading -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center),
+                        color = Primary
+                    )
                 }
+
+                is UiState.Success -> {
+                    val orders = state.data
+                    if (orders.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(text = "Bạn chưa có đơn hàng nào", color = Color.Gray)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            items(orders) { order ->
+                                OrderHistoryCard(order)
+                            }
+                        }
+                    }
+                }
+
+                is UiState.Error -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(text = "Lỗi: ${state.message}", color = Color.Red)
+                    }
+                }
+
+                else -> {}
             }
         }
     }

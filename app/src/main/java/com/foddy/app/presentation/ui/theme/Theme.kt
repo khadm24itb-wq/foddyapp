@@ -32,7 +32,7 @@ private val LightColorScheme = lightColorScheme(
 )
 
 @Composable
-fun FoddyAppTheme(
+fun FoddyTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {

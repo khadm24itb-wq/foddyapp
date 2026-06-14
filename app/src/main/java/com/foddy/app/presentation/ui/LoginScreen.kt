@@ -25,20 +25,39 @@ import androidx.navigation.NavController
 import com.foddy.app.presentation.navigation.Screen
 import com.foddy.app.presentation.viewmodel.UserViewModel
 import com.foddy.app.presentation.ui.theme.Primary
+import com.foddy.app.domain.model.UserRole
+import com.foddy.app.presentation.ui.state.UiState
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 
 @Composable
-fun LoginScreen(navController: NavController, userViewModel: UserViewModel) {
+fun LoginScreen(
+    navController: NavController,
+    userViewModel: UserViewModel = hiltViewModel()
+) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val context = LocalContext.current
     val uiState by userViewModel.uiState.collectAsStateWithLifecycle()
+    val forgotPasswordState by userViewModel.forgotPasswordState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(forgotPasswordState) {
+        when (forgotPasswordState) {
+            is UiState.Success -> {
+                Toast.makeText(context, "Email khôi phục mật khẩu đã được gửi!", Toast.LENGTH_LONG).show()
+            }
+            is UiState.Error -> {
+                Toast.makeText(context, "Lỗi: ${(forgotPasswordState as UiState.Error).message}", Toast.LENGTH_SHORT).show()
+            }
+            else -> {}
+        }
+    }
 
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -99,7 +118,26 @@ fun LoginScreen(navController: NavController, userViewModel: UserViewModel) {
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 shape = RoundedCornerShape(12.dp)
             )
-            Spacer(modifier = Modifier.height(32.dp))
+            
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                Text(
+                    text = "Quên mật khẩu?",
+                    color = Primary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .padding(vertical = 8.dp)
+                        .clickable {
+                            if (email.isNotEmpty()) {
+                                userViewModel.forgotPassword(email)
+                            } else {
+                                Toast.makeText(context, "Vui lòng nhập email để đặt lại mật khẩu", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
 
             if (uiState.isLoading) {
                 CircularProgressIndicator(color = Primary)
@@ -164,10 +202,10 @@ fun LoginScreen(navController: NavController, userViewModel: UserViewModel) {
 private fun navigateToRoleHome(navController: NavController, userViewModel: UserViewModel) {
     val user = userViewModel.uiState.value.user
     if (user != null) {
-        val route = when (user.role) {
-            "DRIVER" -> Screen.DriverApp.route
-            "RESTAURANT" -> Screen.RestaurantAdmin.route
-            "ADMIN" -> Screen.RestaurantAdmin.route
+        val route = when (user.userRole) {
+            UserRole.DRIVER -> Screen.DriverApp.route
+            UserRole.RESTAURANT_OWNER -> Screen.RestaurantAdmin.route
+            UserRole.ADMIN -> Screen.RestaurantAdmin.route
             else -> Screen.Home.route
         }
         navController.navigate(route) {

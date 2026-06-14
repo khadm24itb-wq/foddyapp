@@ -7,7 +7,7 @@ import com.foddy.app.domain.model.AIRecommendation
 import com.foddy.app.domain.model.RecommendationType
 import com.foddy.app.domain.repository.AIRepository
 import com.foddy.app.domain.repository.MenuRepository
-import com.foddy.app.domain.util.Resource
+import com.foddy.app.core.Resource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

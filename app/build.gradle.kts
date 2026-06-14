@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.room)
     alias(libs.plugins.ksp)
+    id("com.google.firebase.crashlytics")
 }
 
 android {
@@ -95,9 +96,11 @@ dependencies {
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.storage)
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.messaging)
     implementation(libs.firebase.auth)
+    implementation(libs.firebase.crashlytics)
     implementation(libs.play.services.auth)
 
     // Generative AI (Gemini)
@@ -114,6 +117,15 @@ dependencies {
 
     // Logging
     implementation(libs.timber)
+
+    // Billing
+    implementation(libs.billing.ktx)
+
+    // DataStore
+    implementation(libs.androidx.datastore.preferences)
+
+    // WorkManager
+    implementation(libs.androidx.work.runtime.ktx)
 
     // Room
     implementation(libs.room.runtime)

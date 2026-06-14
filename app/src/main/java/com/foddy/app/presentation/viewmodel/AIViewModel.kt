@@ -8,7 +8,7 @@ import com.foddy.app.domain.model.MessageRole
 import com.foddy.app.domain.model.OrderRequest
 import com.foddy.app.domain.repository.AIRepository
 import com.foddy.app.domain.repository.MenuRepository
-import com.foddy.app.domain.util.Resource
+import com.foddy.app.core.Resource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
